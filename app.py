@@ -1,6 +1,12 @@
 import streamlit as st
 import pandas as pd
-from streamlit_option_menu import option_menu
+
+# Tenta importar o streamlit_option_menu; se não estiver instalado, usa o componente nativo do Streamlit
+try:
+    from streamlit_option_menu import option_menu
+    HAS_OPTION_MENU = True
+except ImportError:
+    HAS_OPTION_MENU = False
 
 # ==========================================
 # 1. CONFIGURAÇÃO DA PÁGINA (MOBILE HEALTH)
@@ -78,7 +84,6 @@ st.markdown("""
 # ==========================================
 @st.cache_data
 def carregar_banco_dados():
-    # Catálogo com Suplementos, MIPs e Portaria 344/98
     cat_meds = pd.DataFrame([
         # --- MEDICAMENTOS SUJEITOS À PORTARIA 344/98 ---
         {"id": 201, "nome_principio": "Clonazepam", "apresentacao": "2,5mg/mL Gotas (20mL)", "categoria": "Portaria 344/98 (Lista B1)", "classe": "Ansiolítico / Anticonvulsivante", "retencao": True, "orientacao": "Notificação de Receita B (Azul). Causa dependência. Uso conforme orientação médica."},
@@ -96,31 +101,21 @@ def carregar_banco_dados():
         {"id": 403, "nome_principio": "Creatina Monohidratada", "apresentacao": "300g em Pó (100% Pura)", "categoria": "Suplemento Alimentar", "classe": "Nutrição Esportiva", "retencao": False, "orientacao": "Consumir diariamente junto a uma fonte de carboidrato.", "em_oferta": False, "desconto": None}
     ])
     
-    # Base de Ofertas por Laboratório e Farmácia
     ofertas = pd.DataFrame([
-        # Clonazepam
         {"med_id": 201, "laboratorio": "Medley", "farmacia": "Drogaria São Paulo", "preco": 14.50, "distancia_km": 0.8},
         {"med_id": 201, "laboratorio": "EMS Genéricos", "farmacia": "Droga Raia", "preco": 11.90, "distancia_km": 1.5},
-        # Zolpidem
         {"med_id": 202, "laboratorio": "Eurofarma", "farmacia": "Pague Menos", "preco": 32.00, "distancia_km": 1.2},
         {"med_id": 202, "laboratorio": "Aché", "farmacia": "Drogaria São Paulo", "preco": 38.90, "distancia_km": 0.8},
-        # Sertralina
         {"med_id": 203, "laboratorio": "Eurofarma", "farmacia": "Droga Raia", "preco": 28.90, "distancia_km": 1.5},
         {"med_id": 203, "laboratorio": "Medley", "farmacia": "Pague Menos", "preco": 24.50, "distancia_km": 2.1},
-        # Dipirona
         {"med_id": 301, "laboratorio": "Neo Química", "farmacia": "Farmácia Bairro", "preco": 6.50, "distancia_km": 0.5},
         {"med_id": 301, "laboratorio": "EMS Genéricos", "farmacia": "Droga Raia", "preco": 8.90, "distancia_km": 1.5},
-        # Paracetamol
         {"med_id": 302, "laboratorio": "Teuto", "farmacia": "Farmácia Bairro", "preco": 7.20, "distancia_km": 0.5},
-        # Ibuprofeno
         {"med_id": 303, "laboratorio": "Medley", "farmacia": "Drogaria São Paulo", "preco": 15.90, "distancia_km": 0.8},
-        # Vitamina C
         {"med_id": 401, "laboratorio": "Redoxon (Bayer)", "farmacia": "Droga Raia", "preco": 18.90, "distancia_km": 1.5},
         {"med_id": 401, "laboratorio": "Cimed", "farmacia": "Pague Menos", "preco": 12.90, "distancia_km": 2.1},
-        # Ômega 3
         {"med_id": 402, "laboratorio": "Max Titanium", "farmacia": "Drogaria São Paulo", "preco": 59.90, "distancia_km": 0.8},
         {"med_id": 402, "laboratorio": "Catarinense Pharma", "farmacia": "Farmácia Bairro", "preco": 49.90, "distancia_km": 0.5},
-        # Creatina
         {"med_id": 403, "laboratorio": "Integralmédica", "farmacia": "Droga Raia", "preco": 89.90, "distancia_km": 1.5}
     ])
     
@@ -128,12 +123,11 @@ def carregar_banco_dados():
 
 df_meds, df_ofertas = carregar_banco_dados()
 
-# Inicialização da Sessão do Carrinho
 if 'carrinho' not in st.session_state:
     st.session_state.carrinho = []
 
 # ==========================================
-# 3. CABEÇALHO DO APLICATIVO
+# 3. CABEÇALHO E NAVEGAÇÃO
 # ==========================================
 st.markdown("""
 <div class="health-header">
@@ -142,20 +136,26 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Navegação Estilo Mobile usando streamlit-option-menu
-selected = option_menu(
-    menu_title=None,
-    options=["Buscar", "Ofertas / Suplementos", "Carrinho"],
-    icons=["search", "lightning-charge", "cart"],
-    default_index=0,
-    orientation="horizontal",
-    styles={
-        "container": {"padding": "0!important", "background-color": "#ffffff"},
-        "icon": {"color": "#1988a6", "font-size": "16px"},
-        "nav-link": {"font-size": "13px", "text-align": "center", "margin": "0px", "--hover-color": "#eee"},
-        "nav-link-selected": {"background-color": "#1988a6", "color": "white"}
-    }
-)
+# Navegação segura com tratamento de erro
+opcoes_menu = ["Buscar", "Ofertas / Suplementos", "Carrinho"]
+
+if HAS_OPTION_MENU:
+    selected = option_menu(
+        menu_title=None,
+        options=opcoes_menu,
+        icons=["search", "lightning-charge", "cart"],
+        default_index=0,
+        orientation="horizontal",
+        styles={
+            "container": {"padding": "0!important", "background-color": "#ffffff"},
+            "icon": {"color": "#1988a6", "font-size": "16px"},
+            "nav-link": {"font-size": "13px", "text-align": "center", "margin": "0px", "--hover-color": "#eee"},
+            "nav-link-selected": {"background-color": "#1988a6", "color": "white"}
+        }
+    )
+else:
+    # Se a biblioteca não estiver instalada, usa os seletores nativos do Streamlit
+    selected = st.radio("Navegação:", opcoes_menu, horizontal=True, label_visibility="collapsed")
 
 # ==========================================
 # 4. ABA 1: BUSCA ANINHADA E MENOR PREÇO
@@ -163,7 +163,6 @@ selected = option_menu(
 if selected == "Buscar":
     st.caption("Digite abaixo para buscar por nome ou princípio ativo:")
     
-    # Campo de busca por texto com autocomplete aninhado
     termo_busca = st.selectbox(
         "Selecione ou digite o item desejado:",
         options=[""] + list(df_meds["nome_principio"].unique()),
@@ -171,10 +170,8 @@ if selected == "Buscar":
     )
     
     if termo_busca != "":
-        # Filtro do Medicamento/Suplemento selecionado
         med_info = df_meds[df_meds["nome_principio"] == termo_busca].iloc[0]
         
-        # Tag de Categoria Regulatória
         cat_tag = f"<span class='badge-portaria'>{med_info['categoria']}</span>" if med_info['retencao'] else (
             f"<span class='badge-suplemento'>{med_info['categoria']}</span>" if "Suplemento" in med_info['categoria'] else f"<span class='badge-mip'>{med_info['categoria']}</span>"
         )
@@ -188,7 +185,6 @@ if selected == "Buscar":
             
         st.subheader("🏷️ Comparativo de Laboratórios & Menor Preço")
         
-        # Cruzamento no Pandas para buscar ofertas e ordenar pelo Menor Preço
         ofertas_med = df_ofertas[df_ofertas["med_id"] == med_info["id"]].sort_values(by="preco")
         
         if not ofertas_med.empty:
@@ -226,7 +222,6 @@ elif selected == "Ofertas / Suplementos":
     st.subheader("⚡ Suplementos & Vitaminas em Destaque")
     st.caption("Aproveite os descontos especiais para prevenção e qualidade de vida:")
     
-    # Filtro Pandas para capturar suplementos com flag em_oferta == True
     suplementos_oferta = df_meds[(df_meds["categoria"] == "Suplemento Alimentar") & (df_meds["em_oferta"] == True)]
     
     for _, sup in suplementos_oferta.iterrows():
@@ -239,7 +234,6 @@ elif selected == "Ofertas / Suplementos":
         </div>
         """, unsafe_allow_html=True)
         
-        # Busca a melhor oferta desse suplemento
         ofertas_sup = df_ofertas[df_ofertas["med_id"] == sup["id"]].sort_values(by="preco")
         if not ofertas_sup.empty:
             melhor = ofertas_sup.iloc[0]
@@ -273,15 +267,14 @@ elif selected == "Carrinho":
             st.write(f"**{item['produto']}**")
             st.caption(f"Marca/Lab: {item['laboratorio']} | Retirada: {item['farmacia']} — **R$ {item['preco']:.2f}**")
             if item['retencao']:
-                st.warning(" Exige Envio de Receita Médica (Portaria 344/98)")
+                st.warning("⚠️ Exige Envio de Receita Médica (Portaria 344/98)")
             st.divider()
             
         total = df_cart["preco"].sum()
         st.markdown(f"### Total do Pedido: **R$ {total:.2f}**")
         
-        # Exige anexo de receita médica caso haja algum medicamento da Portaria 344/98
         if any(df_cart["retencao"]):
-            st.file_uploader(" Anexar Foto/PDF da Receita Médica (Obrigatório)", type=["jpg", "png", "pdf"])
+            st.file_uploader("📷 Anexar Foto/PDF da Receita Médica (Obrigatório)", type=["jpg", "png", "pdf"])
             
         col1, col2 = st.columns(2)
         with col1:
