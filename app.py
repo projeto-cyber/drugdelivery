@@ -1,127 +1,158 @@
 import streamlit as st
 
-# 1. Configuração da página para simular tela de celular
+# ==========================================
+# 1. CONFIGURAÇÃO DA TELA (FRONTEND MOBILE)
+# ==========================================
 st.set_page_config(
-    page_title="DrogaExpress - App Farmácia",
+    page_title="PharmaExpress - Mobile View",
     page_icon="💊",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado para deixar com cara de App Mobile
+# Estilização CSS para simular o design de apps como Drogasil/Raia
 st.markdown("""
 <style>
-    /* Estilização geral estilo aplicativo */
-    .stApp {
-        background-color: #f5f7fa;
-    }
+    .stApp { background-color: #f8f9fa; }
     
-    /* Header do App */
-    .app-header {
-        background-color: #0056b3;
+    /* Topo do App */
+    .mobile-header {
+        background: linear-gradient(135deg, #004b87, #0066b2);
         color: white;
-        padding: 18px;
-        border-radius: 0px 0px 20px 20px;
-        margin-top: -60px;
-        margin-bottom: 20px;
+        padding: 20px;
+        border-radius: 0 0 24px 24px;
+        margin: -60px -20px 20px -20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
     
-    /* Card de Produto estilo Droga Raia */
+    /* Cards de Produtos */
     .product-card {
-        background-color: white;
-        border-radius: 12px;
-        padding: 15px;
-        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.05);
-        margin-bottom: 15px;
-        border: 1px solid #e1e8ed;
+        background: white;
+        padding: 16px;
+        border-radius: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        margin-bottom: 12px;
+        border: 1px solid #edf2f7;
     }
     
-    .price-tag {
-        color: #d93025;
-        font-size: 20px;
-        font-weight: bold;
-    }
-
-    .badge-receita {
+    .badge-prescricao {
         background-color: #fff3cd;
         color: #856404;
-        font-size: 11px;
-        padding: 2px 6px;
-        border-radius: 4px;
+        font-size: 10px;
         font-weight: bold;
+        padding: 3px 8px;
+        border-radius: 6px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Cabeçalho no estilo App
+
+# ==========================================
+# 2. BACKEND / LÓGICA DE DADOS (API SIMULADA)
+# ==========================================
+class PharmaBackendAPI:
+    """Simula o backend que futuramente será feito em FastAPI ou Node.js"""
+    
+    @staticmethod
+    def get_catalog():
+        return [
+            {"id": 1, "nome": "Amoxicilina 500mg 21 Cáp.", "lab": "Medley", "preco": 28.90, "requer_receita": True},
+            {"id": 2, "nome": "Dipirona Sódica 500mg/ml", "lab": "Neo Química", "preco": 8.50, "requer_receita": False},
+            {"id": 3, "nome": "Vitamina D3 2000UI 30 Cáp.", "lab": "Cimed", "preco": 42.00, "requer_receita": False},
+            {"id": 4, "nome": "Losartana Potássica 50mg", "lab": "EMS", "preco": 14.90, "requer_receita": True}
+        ]
+
+    @staticmethod
+    def process_order(cart_items, patient_name, has_prescription):
+        if not patient_name:
+            return False, "Informe o nome do paciente."
+        
+        # Validação de negócio farmacêutico
+        for item in cart_items:
+            if item['requer_receita'] and not has_prescription:
+                return False, f"O item '{item['nome']}' exige envio obrigatório de receita médica (RDC 344/98)."
+                
+        return True, "Pedido integrado com sucesso ao sistema da farmácia!"
+
+
+# Inicializa o estado da sessão do carrinho (Sessão do Usuário)
+if 'cart' not in st.session_state:
+    st.session_state.cart = []
+
+
+# ==========================================
+# 3. INTERFACE VISUAL DO APLICATIVO (FRONTEND)
+# ==========================================
+
+# Cabeçalho Visual
 st.markdown("""
-<div class="app-header">
-    <small>Olá, Farmacêutico 👋</small>
-    <h3 style="margin:0; padding-top:4px;">Como podemos ajudar hoje?</h3>
+<div class="mobile-header">
+    <p style="margin:0; font-size:13px; opacity:0.8;">FarmaExpress Digital</p>
+    <h2 style="margin:0; font-weight:600;">Olá, Farmacêutico 🩺</h2>
 </div>
 """, unsafe_allow_html=True)
 
-# 4. Campo de busca em destaque
-busca = st.text_input("🔍 Buscar medicamentos, cosméticos...", placeholder="Ex: Dipirona, Dorflex, Protetor Solar")
+# Abas de Navegação Inferior/Superior simulando App Mobile
+tab_vitrine, tab_carrinho, tab_validacao = st.tabs(["💊 Vitrine", "🛒 Carrinho", "📋 Validação de Receita"])
 
-# 5. Categorias Rápidas (Atalhos estilo app)
-st.subheader("Categorias Rápidas")
-cat_col1, cat_col2, cat_col3, cat_col4 = st.columns(4)
+catalog = PharmaBackendAPI.get_catalog()
 
-with cat_col1:
-    st.button("💊\nMedicamentos", use_container_width=True)
-with cat_col2:
-    st.button("🩺\nReceita", use_container_width=True)
-with cat_col3:
-    st.button("🧴\nHigiene", use_container_width=True)
-with cat_col4:
-    st.button("⚡\nOfertas", use_container_width=True)
+with tab_vitrine:
+    st.subheader("Medicamentos em Destaque")
+    busca = st.text_input("🔍 O que você procura?", placeholder="Ex: Dipirona, Amoxicilina...")
+    
+    for product in catalog:
+        if busca.lower() in product['nome'].lower():
+            with st.container():
+                st.markdown(f"""
+                <div class="product-card">
+                    <b style="font-size:16px;">{product['nome']}</b><br>
+                    <span style="color: #718096; font-size:12px;">Laboratório: {product['lab']}</span><br>
+                    {'<span class="badge-prescricao">📄 Exige Receita</span><br>' if product['requer_receita'] else '<br>'}
+                    <span style="color: #e53e3e; font-size:18px; font-weight:bold;">R$ {product['preco']:.2f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if st.button("Adicionar ao Carrinho", key=f"btn_{product['id']}"):
+                    st.session_state.cart.append(product)
+                    st.success(f"Adicionado: {product['nome']}")
 
-st.write("---")
-
-# 6. Feed de Produtos em Destaque
-st.subheader("Mais Vendidos")
-
-# Lista simulada de banco de dados de medicamentos
-produtos = [
-    {
-        "nome": "Amoxicilina 500mg - 21 Cáp.",
-        "lab": "Medley Genérico",
-        "preco": "R$ 28,90",
-        "retencao": True
-    },
-    {
-        "nome": "Dipirona Monoidratada 1g - 10 Comprimidos",
-        "lab": "EMS Genéricos",
-        "preco": "R$ 9,50",
-        "retencao": False
-    },
-    {
-        "nome": "Protetor Solar Facial FPS 60 50g",
-        "lab": "Minesol Neostrata",
-        "preco": "R$ 69,90",
-        "retencao": False
-    }
-]
-
-# Renderização dinâmica dos Cards dos Produtos
-for prod in produtos:
-    with st.container():
-        st.markdown(f"""
-        <div class="product-card">
-            <h4>{prod['nome']}</h4>
-            <p style="color: #6c757d; font-size: 13px; margin-bottom: 5px;">{prod['lab']}</p>
-            {"<span class='badge-receita'>📄 Exige Retenção de Receita</span><br><br>" if prod['retencao'] else ""}
-            <span class="price-tag">{prod['preco']}</span>
-        </div>
-        """, unsafe_allow_html=True)
+with tab_carrinho:
+    st.subheader("Seu Carrinho de Compras")
+    if not st.session_state.cart:
+        st.info("O carrinho está vazio.")
+    else:
+        total = 0
+        for idx, item in enumerate(st.session_state.cart):
+            st.write(f"- {item['nome']} (**R$ {item['preco']:.2f}**)")
+            total += item['preco']
         
-        col_btn1, col_btn2 = st.columns([3, 1])
-        with col_btn1:
-            st.button("Adicionar ao Carrinho 🛒", key=f"add_{prod['nome']}", use_container_width=True)
-        with col_btn2:
-            st.button("❤️", key=f"fav_{prod['nome']}", use_container_width=True)
+        st.divider( )
+        st.markdown(f"### Total: R$ {total:.2f}")
+        
+        if st.button("Limpar Carrinho"):
+            st.session_state.cart = []
+            st.rerun()
 
-# 7. Rodapé do App (Menu Inferior de Navegação)
-st.write("---")
-st.caption("📱 **Modo de Exibição Mobile Ativo**")
+with tab_validacao:
+    st.subheader("Checkout e Validação Farmacêutica")
+    patient_name = st.text_input("Nome Completo do Paciente")
+    has_prescription = st.checkbox("Possui Receita Médica Válida?")
+    
+    # Campo de upload de imagem para simular o envio da receita médica
+    uploaded_file = st.file_uploader("Enviar Foto da Receita (PDF ou Imagem)", type=["png", "jpg", "jpeg", "pdf"])
+    
+    if st.button("Finalizar Pedido", type="primary"):
+        # Chamada ao "Backend" validando as regras de negócio
+        success, message = PharmaBackendAPI.process_order(
+            st.session_state.cart, 
+            patient_name, 
+            has_prescription or (uploaded_file is not None)
+        )
+        
+        if success:
+            st.success(message)
+            st.balloons()
+            st.session_state.cart = [] # Limpa o carrinho após finalizar
+        else:
+            st.error(message)
