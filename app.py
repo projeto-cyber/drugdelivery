@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from streamlit_option_menu import option_menu
 
 # ==========================================
 # 1. CONFIGURAÇÃO DA PÁGINA (MOBILE HEALTH)
@@ -11,67 +12,121 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Customização visual para estilo de app móvel focado em saúde
+# Estilização CSS profissional estilo App Farmacêutico
 st.markdown("""
 <style>
-    .stApp { background-color: #f4f7f6; }
+    .stApp { background-color: #f8f9fa; }
     
     .health-header {
         background: linear-gradient(135deg, #0d5c75, #1988a6);
         color: white;
-        padding: 22px;
+        padding: 20px;
         border-radius: 0 0 20px 20px;
-        margin: -60px -20px 20px -20px;
+        margin: -60px -20px 15px -20px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    
+    .promo-card {
+        background: linear-gradient(135deg, #28a745, #218838);
+        color: white;
+        padding: 14px;
+        border-radius: 12px;
+        margin-bottom: 12px;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.1);
     }
     
     .pharmacy-card {
         background: white;
-        padding: 16px;
+        padding: 14px;
         border-radius: 12px;
-        border-left: 5px solid #1988a6;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        margin-bottom: 12px;
+        border-left: 4px solid #1988a6;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        margin-bottom: 10px;
     }
     
-    .alert-box {
-        background-color: #fff3cd;
-        color: #856404;
-        padding: 12px;
-        border-radius: 8px;
-        border: 1px solid #ffeeba;
-        font-size: 13px;
-        margin-top: 10px;
+    .badge-portaria {
+        background-color: #dc3545;
+        color: white;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: bold;
+    }
+    
+    .badge-mip {
+        background-color: #17a2b8;
+        color: white;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: bold;
+    }
+    
+    .badge-suplemento {
+        background-color: #28a745;
+        color: white;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. BASE DE DADOS COM PANDAS
+# 2. BANCO DE DADOS DIVERSIFICADO (PANDAS)
 # ==========================================
 @st.cache_data
-def carregar_dados():
-    # Base de Medicamentos cadastrados
-    medicamentos = pd.DataFrame([
-        {"id": 101, "nome": "Amoxicilina 500mg (21 Cáp.)", "classe": "Antibiótico", "retencao": True, "orientacao": "Tomar de 8 em 8 horas. Concluir todo o tratamento."},
-        {"id": 102, "nome": "Dipirona Monoidratada 1g (10 Comp.)", "classe": "Analgésico/Antitérmico", "retencao": False, "orientacao": "Tomar em caso de dor ou febre de 6 em 6 horas."},
-        {"id": 103, "nome": "Losartana Potássica 50mg (30 Comp.)", "classe": "Anti-hipertensivo", "retencao": True, "orientacao": "Uso contínuo conforme indicação médica. Medir pressão regularmente."},
-        {"id": 104, "nome": "Omeprazol 20mg (28 Cáp.)", "classe": "Antiácido", "retencao": False, "orientacao": "Ingerir em jejum, 30 minutos antes do café da manhã."}
-    ])
-    
-    # Base de Farmácias Parceiras e Preços (com simulação de geolocalização)
-    estoque_farmacias = pd.DataFrame([
-        {"med_id": 101, "farmacia": "Drogaria São Paulo - Centro", "distancia_km": 0.8, "preco": 24.90, "endereco": "Av. Principal, 100"},
-        {"med_id": 101, "farmacia": "Droga Raia - Jardins", "distancia_km": 2.3, "preco": 28.50, "endereco": "Rua das Flores, 45"},
-        {"med_id": 102, "farmacia": "Drogaria São Paulo - Centro", "distancia_km": 0.8, "preco": 8.50, "endereco": "Av. Principal, 100"},
-        {"med_id": 102, "farmacia": "Farmácia Pague Menos - Bairro", "distancia_km": 1.4, "preco": 6.90, "endereco": "Praça Central, 12"},
-        {"med_id": 103, "farmacia": "Droga Raia - Jardins", "distancia_km": 2.3, "preco": 12.00, "endereco": "Rua das Flores, 45"},
-        {"med_id": 104, "farmacia": "Farmácia Pague Menos - Bairro", "distancia_km": 1.4, "preco": 18.90, "endereco": "Praça Central, 12"}
-    ])
-    
-    return medicamentos, estoque_farmacias
+def carregar_banco_dados():
+    # Catálogo com Suplementos, MIPs e Portaria 344/98
+    cat_meds = pd.DataFrame([
+        # --- MEDICAMENTOS SUJEITOS À PORTARIA 344/98 ---
+        {"id": 201, "nome_principio": "Clonazepam", "apresentacao": "2,5mg/mL Gotas (20mL)", "categoria": "Portaria 344/98 (Lista B1)", "classe": "Ansiolítico / Anticonvulsivante", "retencao": True, "orientacao": "Notificação de Receita B (Azul). Causa dependência. Uso conforme orientação médica."},
+        {"id": 202, "nome_principio": "Zolpidem", "apresentacao": "10mg (30 Comprimidos)", "categoria": "Portaria 344/98 (Lista B1)", "classe": "Indutor do Sono", "retencao": True, "orientacao": "Notificação de Receita B (Azul). Ingerir imediatamente antes de deitar."},
+        {"id": 203, "nome_principio": "Sertralina (Cloridrato)", "apresentacao": "50mg (30 Comprimidos)", "categoria": "Portaria 344/98 (Lista C1)", "classe": "Antidepressivo (ISRS)", "retencao": True, "orientacao": "Receita de Controle Especial em 2 vias. Não interromper o tratamento sem orientação."},
 
-df_meds, df_estoque = carregar_dados()
+        # --- MEDICAMENTOS ISENTOS DE PRESCRIÇÃO (MIPs) ---
+        {"id": 301, "nome_principio": "Dipirona Monoidratada", "apresentacao": "1g (10 Comprimidos)", "categoria": "MIP (Isento de Prescrição)", "classe": "Analgésico e Antitérmico", "retencao": False, "orientacao": "Uso adulto. Respeitar o intervalo mínimo de 6 horas entre as doses."},
+        {"id": 302, "nome_principio": "Paracetamol", "apresentacao": "750mg (20 Comprimidos)", "categoria": "MIP (Isento de Prescrição)", "classe": "Analgésico e Antitérmico", "retencao": False, "orientacao": "Atenção: Não ultrapassar 4g diárias para evitar hepatotoxicidade."},
+        {"id": 303, "nome_principio": "Ibuprofeno", "apresentacao": "600mg (20 Comprimidos)", "categoria": "MIP (Isento de Prescrição)", "classe": "Anti-inflamatório", "retencao": False, "orientacao": "Tomar preferencialmente após as refeições para proteger o estômago."},
+
+        # --- SUPLEMENTOS ALIMENTARES E VITAMINAS ---
+        {"id": 401, "nome_principio": "Vitamina C + Zinco", "apresentacao": "1000mg (10 Comp. Efervescentes)", "categoria": "Suplemento Alimentar", "classe": "Imunidade", "retencao": False, "orientacao": "Dissolver 1 comprimido em um copo de água ao dia.", "em_oferta": True, "desconto": "25% OFF"},
+        {"id": 402, "nome_principio": "Ômega 3 Epa DHA", "apresentacao": "1000mg (120 Cápsulas)", "categoria": "Suplemento Alimentar", "classe": "Saúde Cardiovascular", "retencao": False, "orientacao": "Ingerir antes das principais refeições.", "em_oferta": True, "desconto": "30% OFF"},
+        {"id": 403, "nome_principio": "Creatina Monohidratada", "apresentacao": "300g em Pó (100% Pura)", "categoria": "Suplemento Alimentar", "classe": "Nutrição Esportiva", "retencao": False, "orientacao": "Consumir diariamente junto a uma fonte de carboidrato.", "em_oferta": False, "desconto": None}
+    ])
+    
+    # Base de Ofertas por Laboratório e Farmácia
+    ofertas = pd.DataFrame([
+        # Clonazepam
+        {"med_id": 201, "laboratorio": "Medley", "farmacia": "Drogaria São Paulo", "preco": 14.50, "distancia_km": 0.8},
+        {"med_id": 201, "laboratorio": "EMS Genéricos", "farmacia": "Droga Raia", "preco": 11.90, "distancia_km": 1.5},
+        # Zolpidem
+        {"med_id": 202, "laboratorio": "Eurofarma", "farmacia": "Pague Menos", "preco": 32.00, "distancia_km": 1.2},
+        {"med_id": 202, "laboratorio": "Aché", "farmacia": "Drogaria São Paulo", "preco": 38.90, "distancia_km": 0.8},
+        # Sertralina
+        {"med_id": 203, "laboratorio": "Eurofarma", "farmacia": "Droga Raia", "preco": 28.90, "distancia_km": 1.5},
+        {"med_id": 203, "laboratorio": "Medley", "farmacia": "Pague Menos", "preco": 24.50, "distancia_km": 2.1},
+        # Dipirona
+        {"med_id": 301, "laboratorio": "Neo Química", "farmacia": "Farmácia Bairro", "preco": 6.50, "distancia_km": 0.5},
+        {"med_id": 301, "laboratorio": "EMS Genéricos", "farmacia": "Droga Raia", "preco": 8.90, "distancia_km": 1.5},
+        # Paracetamol
+        {"med_id": 302, "laboratorio": "Teuto", "farmacia": "Farmácia Bairro", "preco": 7.20, "distancia_km": 0.5},
+        # Ibuprofeno
+        {"med_id": 303, "laboratorio": "Medley", "farmacia": "Drogaria São Paulo", "preco": 15.90, "distancia_km": 0.8},
+        # Vitamina C
+        {"med_id": 401, "laboratorio": "Redoxon (Bayer)", "farmacia": "Droga Raia", "preco": 18.90, "distancia_km": 1.5},
+        {"med_id": 401, "laboratorio": "Cimed", "farmacia": "Pague Menos", "preco": 12.90, "distancia_km": 2.1},
+        # Ômega 3
+        {"med_id": 402, "laboratorio": "Max Titanium", "farmacia": "Drogaria São Paulo", "preco": 59.90, "distancia_km": 0.8},
+        {"med_id": 402, "laboratorio": "Catarinense Pharma", "farmacia": "Farmácia Bairro", "preco": 49.90, "distancia_km": 0.5},
+        # Creatina
+        {"med_id": 403, "laboratorio": "Integralmédica", "farmacia": "Droga Raia", "preco": 89.90, "distancia_km": 1.5}
+    ])
+    
+    return cat_meds, ofertas
+
+df_meds, df_ofertas = carregar_banco_dados()
 
 # Inicialização da Sessão do Carrinho
 if 'carrinho' not in st.session_state:
@@ -83,101 +138,158 @@ if 'carrinho' not in st.session_state:
 st.markdown("""
 <div class="health-header">
     <small>🩺 Atenção Farmacêutica & Segurança</small>
-    <h3 style="margin:0; font-weight:600;">Busca de Medicamentos</h3>
+    <h3 style="margin:0; font-weight:600;">PharmaCare Digital</h3>
 </div>
 """, unsafe_allow_html=True)
 
-# Navegação por Abas
-tab_busca, tab_carrinho = st.tabs(["🔍 Pesquisar Medicamento", f"🛒 Meu Carrinho ({len(st.session_state.carrinho)})"])
+# Navegação Estilo Mobile usando streamlit-option-menu
+selected = option_menu(
+    menu_title=None,
+    options=["Buscar", "Ofertas / Suplementos", "Carrinho"],
+    icons=["search", "lightning-charge", "cart"],
+    default_index=0,
+    orientation="horizontal",
+    styles={
+        "container": {"padding": "0!important", "background-color": "#ffffff"},
+        "icon": {"color": "#1988a6", "font-size": "16px"},
+        "nav-link": {"font-size": "13px", "text-align": "center", "margin": "0px", "--hover-color": "#eee"},
+        "nav-link-selected": {"background-color": "#1988a6", "color": "white"}
+    }
+)
 
 # ==========================================
-# 4. ABA 1: BUSCA PREDITIVA E COMPARATIVO DE DISTÂNCIA
+# 4. ABA 1: BUSCA ANINHADA E MENOR PREÇO
 # ==========================================
-with tab_busca:
-    st.caption("Digite o nome do medicamento para verificar a disponibilidade nas farmácias próximas:")
+if selected == "Buscar":
+    st.caption("Digite abaixo para buscar por nome ou princípio ativo:")
     
-    # Campo de Seleção / Digitação do Medicamento
-    opcoes_meds = ["Selecione ou digite o nome..."] + list(df_meds["nome"].unique())
-    med_selecionado = st.selectbox("Buscar Medicamento:", opcoes_meds, index=0)
+    # Campo de busca por texto com autocomplete aninhado
+    termo_busca = st.selectbox(
+        "Selecione ou digite o item desejado:",
+        options=[""] + list(df_meds["nome_principio"].unique()),
+        format_func=lambda x: "🔍 Digite para pesquisar..." if x == "" else x
+    )
     
-    if med_selecionado != "Selecione ou digite o nome...":
-        # Processamento via Pandas
-        info_med = df_meds[df_meds["nome"] == med_selecionado].iloc[0]
-        resultados = pd.merge(df_estoque, df_meds, left_on="med_id", right_on="id")
-        resultados_filtrados = resultados[resultados["nome"] == med_selecionado].sort_values(by="distancia_km")
+    if termo_busca != "":
+        # Filtro do Medicamento/Suplemento selecionado
+        med_info = df_meds[df_meds["nome_principio"] == termo_busca].iloc[0]
         
-        # Painel de Orientações do Farmacêutico
-        st.subheader("📋 Informações de Segurança")
-        st.info(f"**Classe Farmacológica:** {info_med['classe']}\n\n**Orientação de Uso:** {info_med['orientacao']}")
+        # Tag de Categoria Regulatória
+        cat_tag = f"<span class='badge-portaria'>{med_info['categoria']}</span>" if med_info['retencao'] else (
+            f"<span class='badge-suplemento'>{med_info['categoria']}</span>" if "Suplemento" in med_info['categoria'] else f"<span class='badge-mip'>{med_info['categoria']}</span>"
+        )
         
-        if info_med['retencao']:
-            st.markdown("""
-            <div class="alert-box">
-                <b>⚠️ Sujeito a Controle Especial (RDC 344/98):</b><br>
-                Este medicamento exige receita médica válida e retenção no momento da retirada ou entrega.
-            </div><br>
-            """, unsafe_allow_html=True)
+        st.markdown(f"### {med_info['nome_principio']} {cat_tag}", unsafe_allow_html=True)
+        st.write(f"**Apresentação / Dosagem:** {med_info['apresentacao']}")
+        st.info(f"**Classe:** {med_info['classe']}\n\n**Orientação do Farmacêutico:** {med_info['orientacao']}")
+        
+        if med_info['retencao']:
+            st.error("⚠️ Item de Controle Especial (Portaria 344/98): Exige retenção de receita médica no ato da entrega/retirada.")
             
-        st.subheader("🏪 Farmácias Próximas com Estoque")
+        st.subheader("🏷️ Comparativo de Laboratórios & Menor Preço")
         
-        # Exibição das unidades encontradas
-        for _, row in resultados_filtrados.iterrows():
-            with st.container():
+        # Cruzamento no Pandas para buscar ofertas e ordenar pelo Menor Preço
+        ofertas_med = df_ofertas[df_ofertas["med_id"] == med_info["id"]].sort_values(by="preco")
+        
+        if not ofertas_med.empty:
+            menor_preco = ofertas_med.iloc[0]["preco"]
+            st.success(f"💡 **Menor preço encontrado:** R$ {menor_preco:.2f} ({ofertas_med.iloc[0]['laboratorio']})")
+            
+            for _, row in ofertas_med.iterrows():
+                com_destaque = "border: 2px solid #28a745;" if row["preco"] == menor_preco else ""
                 st.markdown(f"""
-                <div class="pharmacy-card">
-                    <b>{row['farmacia']}</b><br>
-                    <small style="color:#777;">{row['endereco']}</small><br>
-                    <span style="color:#555; font-size:13px;">📍 Distância: <b>{row['distancia_km']} km</b></span><br>
-                    <span style="color:#0d5c75; font-weight:bold; font-size:17px;">R$ {row['preco']:.2f}</span>
+                <div class="pharmacy-card" style="{com_destaque}">
+                    <b>Laboratório: {row['laboratorio']}</b><br>
+                    <small>Unidade: {row['farmacia']} (a {row['distancia_km']} km)</small><br>
+                    <span style="color:#0d5c75; font-size:18px; font-weight:bold;">R$ {row['preco']:.2f}</span>
+                    {" <span style='color:#28a745; font-weight:bold;'>(Menor Valor)</span>" if row['preco'] == menor_preco else ""}
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Chave única para o botão evitar conflitos no Streamlit
-                chave_botao = f"btn_{row['med_id']}_{row['distancia_km']}"
-                if st.button(f"Adicionar da {row['farmacia']}", key=chave_botao):
-                    item_carrinho = {
-                        "medicamento": row['nome'],
+                chave_btn = f"add_{row['med_id']}_{row['laboratorio']}_{row['farmacia']}"
+                if st.button(f"Adicionar ({row['laboratorio']}) - R$ {row['preco']:.2f}", key=chave_btn):
+                    item = {
+                        "produto": f"{med_info['nome_principio']} - {med_info['apresentacao']}",
+                        "laboratorio": row['laboratorio'],
                         "farmacia": row['farmacia'],
                         "preco": row['preco'],
-                        "distancia": row['distancia_km'],
-                        "retencao": row['retencao']
+                        "retencao": med_info['retencao']
                     }
-                    st.session_state.carrinho.append(item_carrinho)
-                    st.success("Item adicionado ao seu carrinho!")
+                    st.session_state.carrinho.append(item)
+                    st.success("Item adicionado ao carrinho com sucesso!")
                     st.rerun()
 
 # ==========================================
-# 5. ABA 2: CARRINHO DE ATENÇÃO FARMACÊUTICA
+# 5. ABA 2: SUPLEMENTOS EM OFERTA EXPOSTOS
 # ==========================================
-with tab_carrinho:
-    st.subheader("Resumo do Pedido")
+elif selected == "Ofertas / Suplementos":
+    st.subheader("⚡ Suplementos & Vitaminas em Destaque")
+    st.caption("Aproveite os descontos especiais para prevenção e qualidade de vida:")
+    
+    # Filtro Pandas para capturar suplementos com flag em_oferta == True
+    suplementos_oferta = df_meds[(df_meds["categoria"] == "Suplemento Alimentar") & (df_meds["em_oferta"] == True)]
+    
+    for _, sup in suplementos_oferta.iterrows():
+        st.markdown(f"""
+        <div class="promo-card">
+            <span style="float:right; background:white; color:#218838; font-weight:bold; padding:2px 8px; border-radius:6px;">{sup['desconto']}</span>
+            <h4 style="margin:0;">{sup['nome_principio']}</h4>
+            <small>{sup['apresentacao']}</small><br>
+            <small><b>Indicação:</b> {sup['classe']}</small>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Busca a melhor oferta desse suplemento
+        ofertas_sup = df_ofertas[df_ofertas["med_id"] == sup["id"]].sort_values(by="preco")
+        if not ofertas_sup.empty:
+            melhor = ofertas_sup.iloc[0]
+            st.write(f"Vendido por **{melhor['farmacia']}** ({melhor['laboratorio']}) por apenas **R$ {melhor['preco']:.2f}**")
+            
+            if st.button(f"Garantir Oferta de {sup['nome_principio']}", key=f"sup_{sup['id']}"):
+                item = {
+                    "produto": f"{sup['nome_principio']} - {sup['apresentacao']}",
+                    "laboratorio": melhor['laboratorio'],
+                    "farmacia": melhor['farmacia'],
+                    "preco": melhor['preco'],
+                    "retencao": False
+                }
+                st.session_state.carrinho.append(item)
+                st.success("Oferta adicionada ao carrinho!")
+                st.rerun()
+        st.divider()
+
+# ==========================================
+# 6. ABA 3: CARRINHO E VALIDAÇÃO FARMACÊUTICA
+# ==========================================
+elif selected == "Carrinho":
+    st.subheader("🛒 Seu Carrinho de Saúde")
     
     if not st.session_state.carrinho:
-        st.write("Seu carrinho está vazio. Escolha um medicamento na aba de pesquisa.")
+        st.info("O seu carrinho está vazio no momento.")
     else:
-        df_carrinho = pd.DataFrame(st.session_state.carrinho)
+        df_cart = pd.DataFrame(st.session_state.carrinho)
         
-        for idx, item in df_carrinho.iterrows():
-            st.write(f"**{item['medicamento']}**")
-            st.caption(f"Unidade: {item['farmacia']} ({item['distancia']} km) — **R$ {item['preco']:.2f}**")
+        for idx, item in df_cart.iterrows():
+            st.write(f"**{item['produto']}**")
+            st.caption(f"Marca/Lab: {item['laboratorio']} | Retirada: {item['farmacia']} — **R$ {item['preco']:.2f}**")
             if item['retencao']:
-                st.warning("Exige Anexo de Receita Médica")
+                st.warning(" Exige Envio de Receita Médica (Portaria 344/98)")
             st.divider()
             
-        total = df_carrinho["preco"].sum()
+        total = df_cart["preco"].sum()
         st.markdown(f"### Total do Pedido: **R$ {total:.2f}**")
         
-        # Envio de Receita se houver medicamento controlado no carrinho
-        if any(df_carrinho["retencao"]):
-            st.file_uploader(" Anexar Foto da Receita (Obrigatório)", type=["jpg", "png", "pdf"])
+        # Exige anexo de receita médica caso haja algum medicamento da Portaria 344/98
+        if any(df_cart["retencao"]):
+            st.file_uploader(" Anexar Foto/PDF da Receita Médica (Obrigatório)", type=["jpg", "png", "pdf"])
             
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
+        col1, col2 = st.columns(2)
+        with col1:
             if st.button("Finalizar Pedido", type="primary", use_container_width=True):
-                st.success("Pedido enviado! O farmacêutico responsável validará a receita antes do despacho.")
+                st.success("Pedido enviado! O farmacêutico responsável validará as retenções de receita antes do envio.")
                 st.balloons()
                 st.session_state.carrinho = []
-        with col_btn2:
+        with col2:
             if st.button("Esvaziar Carrinho", use_container_width=True):
                 st.session_state.carrinho = []
                 st.rerun()
