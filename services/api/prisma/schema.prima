@@ -1,0 +1,121 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CLIENT
+  PHARMACIST
+  COURIER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING_PHARMACIST_REVIEW
+  REJECTED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String
+  role      Role     @default(CLIENT)
+  createdAt DateTime @default(now())
+
+  pharmacist Pharmacist?
+  courier    Courier?
+  orders     Order[]
+}
+
+model Pharmacy {
+  id        String   @id @default(uuid())
+  name      String
+  cnpj      String   @unique
+  crf       String
+  latitude  Float
+  longitude Float
+  address   String
+
+  inventories Inventory[]
+  orders      Order[]
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  substance   String
+  requiresRx  Boolean  @default(false)
+  dosage      String
+
+  inventories Inventory[]
+}
+
+model Inventory {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  productId  String
+  price      Decimal  @db.Decimal(10, 2)
+  stock      Int
+
+  pharmacy   Pharmacy @relation(fields: [pharmacyId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+}
+
+model Pharmacist {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  crfNumber  String
+  pharmacyId String
+
+  user       User     @relation(fields: [userId], references: [id])
+  reviews    OrderReview[]
+}
+
+model Courier {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  cnh           String
+  isFaceVerified Boolean  @default(false)
+
+  user          User     @relation(fields: [userId], references: [id])
+  deliveries    Order[]
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  clientId      String
+  pharmacyId    String
+  courierId     String?
+  totalAmount   Decimal     @db.Decimal(10, 2)
+  deliveryFee   Decimal     @db.Decimal(10, 2)
+  status        OrderStatus @default(PENDING_PHARMACIST_REVIEW)
+  prescriptionUrl String?
+  createdAt     DateTime    @default(now())
+
+  client        User        @relation(fields: [clientId], references: [id])
+  pharmacy      Pharmacy    @relation(fields: [pharmacyId], references: [id])
+  courier       Courier?    @relation(fields: [courierId], references: [id])
+  reviews       OrderReview[]
+}
+
+model OrderReview {
+  id           String     @id @default(uuid())
+  orderId      String
+  pharmacistId String
+  approved     Boolean
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  order        Order      @relation(fields: [orderId], references: [id])
+  pharmacist   Pharmacist @relation(fields: [pharmacistId], references: [id])
+}
