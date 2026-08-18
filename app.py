@@ -1,158 +1,190 @@
 import streamlit as st
+import pandas as pd
+import folium
+from streamlit_folium import st_folium
 
 # ==========================================
-# 1. CONFIGURAÇÃO DA TELA (FRONTEND MOBILE)
+# 1. CONFIGURAÇÃO DA PÁGINA (MOBILE HEALTH)
 # ==========================================
 st.set_page_config(
-    page_title="PharmaExpress - Mobile View",
+    page_title="PharmaCare - Atenção & Saúde",
     page_icon="💊",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# Estilização CSS para simular o design de apps como Drogasil/Raia
+# Customização visual para um app de atenção farmacêutica
 st.markdown("""
 <style>
-    .stApp { background-color: #f8f9fa; }
+    .stApp { background-color: #f4f7f6; }
     
-    /* Topo do App */
-    .mobile-header {
-        background: linear-gradient(135deg, #004b87, #0066b2);
+    .health-header {
+        background: linear-gradient(135deg, #0d5c75, #1988a6);
         color: white;
-        padding: 20px;
-        border-radius: 0 0 24px 24px;
+        padding: 22px;
+        border-radius: 0 0 20px 20px;
         margin: -60px -20px 20px -20px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
     
-    /* Cards de Produtos */
-    .product-card {
+    .pharmacy-card {
         background: white;
         padding: 16px;
-        border-radius: 16px;
+        border-radius: 12px;
+        border-left: 5px solid #1988a6;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         margin-bottom: 12px;
-        border: 1px solid #edf2f7;
     }
     
-    .badge-prescricao {
+    .alert-box {
         background-color: #fff3cd;
         color: #856404;
-        font-size: 10px;
-        font-weight: bold;
-        padding: 3px 8px;
-        border-radius: 6px;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #ffeeba;
+        font-size: 13px;
+        margin-top: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-
 # ==========================================
-# 2. BACKEND / LÓGICA DE DADOS (API SIMULADA)
+# 2. BASE DE DADOS COM PANDAS (SIMULAÇÃO DA REDE)
 # ==========================================
-class PharmaBackendAPI:
-    """Simula o backend que futuramente será feito em FastAPI ou Node.js"""
+@st.cache_data
+def carregar_dados():
+    # Base de Medicamentos cadastrados
+    medicamentos = pd.DataFrame([
+        {"id": 101, "nome": "Amoxicilina 500mg (21 Cáp.)", "classe": "Antibiótico", "retencao": True, "orientacao": "Tomar de 8 em 8 horas. Concluir todo o tratamento."},
+        {"id": 102, "nome": "Dipirona Monoidratada 1g (10 Comp.)", "classe": "Analgésico/Antitérmico", "retencao": False, "orientacao": "Tomar em caso de dor ou febre de 6 em 6 horas."},
+        {"id": 103, "nome": "Losartana Potássica 50mg (30 Comp.)", "classe": "Anti-hipertensivo", "retencao": True, "orientacao": "Uso contínuo conforme indicação médica. Medir pressão regularmente."},
+        {"id": 104, "nome": "Omeprazol 20mg (28 Cáp.)", "classe": "Antiácido", "retencao": False, "orientacao": "Ingerir em jejum, 30 minutos antes do café da manhã."}
+    ])
     
-    @staticmethod
-    def get_catalog():
-        return [
-            {"id": 1, "nome": "Amoxicilina 500mg 21 Cáp.", "lab": "Medley", "preco": 28.90, "requer_receita": True},
-            {"id": 2, "nome": "Dipirona Sódica 500mg/ml", "lab": "Neo Química", "preco": 8.50, "requer_receita": False},
-            {"id": 3, "nome": "Vitamina D3 2000UI 30 Cáp.", "lab": "Cimed", "preco": 42.00, "requer_receita": False},
-            {"id": 4, "nome": "Losartana Potássica 50mg", "lab": "EMS", "preco": 14.90, "requer_receita": True}
-        ]
+    # Base de Farmácias Parceiras e Preços (com coordenadas de GPS)
+    estoque_farmacias = pd.DataFrame([
+        {"med_id": 101, "farmacia": "Drogaria São Paulo - Centro", "distancia_km": 0.8, "preco": 24.90, "lat": -23.5505, "lon": -46.6333},
+        {"med_id": 101, "farmacia": "Droga Raia - Jardins", "distancia_km": 2.3, "preco": 28.50, "lat": -23.5615, "lon": -46.6559},
+        {"med_id": 102, "farmacia": "Drogaria São Paulo - Centro", "distancia_km": 0.8, "preco": 8.50, "lat": -23.5505, "lon": -46.6333},
+        {"med_id": 102, "farmacia": "Farmácia Pague Menos - Bairro", "distancia_km": 1.4, "preco": 6.90, "lat": -23.5430, "lon": -46.6410},
+        {"med_id": 103, "farmacia": "Droga Raia - Jardins", "distancia_km": 2.3, "preco": 12.00, "lat": -23.5615, "lon": -46.6559},
+        {"med_id": 104, "farmacia": "Farmácia Pague Menos - Bairro", "distancia_km": 1.4, "preco": 18.90, "lat": -23.5430, "lon": -46.6410}
+    ])
+    
+    return medicamentos, estoque_farmacias
 
-    @staticmethod
-    def process_order(cart_items, patient_name, has_prescription):
-        if not patient_name:
-            return False, "Informe o nome do paciente."
-        
-        # Validação de negócio farmacêutico
-        for item in cart_items:
-            if item['requer_receita'] and not has_prescription:
-                return False, f"O item '{item['nome']}' exige envio obrigatório de receita médica (RDC 344/98)."
-                
-        return True, "Pedido integrado com sucesso ao sistema da farmácia!"
+df_meds, df_estoque = carregar_dados()
 
-
-# Inicializa o estado da sessão do carrinho (Sessão do Usuário)
-if 'cart' not in st.session_state:
-    st.session_state.cart = []
-
+# Sessão do Carrinho
+if 'carrinho' not in st.session_state:
+    st.session_state.carrinho = []
 
 # ==========================================
-# 3. INTERFACE VISUAL DO APLICATIVO (FRONTEND)
+# 3. CABEÇALHO DO APLICATIVO
 # ==========================================
-
-# Cabeçalho Visual
 st.markdown("""
-<div class="mobile-header">
-    <p style="margin:0; font-size:13px; opacity:0.8;">FarmaExpress Digital</p>
-    <h2 style="margin:0; font-weight:600;">Olá, Farmacêutico 🩺</h2>
+<div class="health-header">
+    <small>🩺 Atenção Farmacêutica & Segurança</small>
+    <h3 style="margin:0; font-weight:600;">Busca de Medicamentos</h3>
 </div>
 """, unsafe_allow_html=True)
 
-# Abas de Navegação Inferior/Superior simulando App Mobile
-tab_vitrine, tab_carrinho, tab_validacao = st.tabs(["💊 Vitrine", "🛒 Carrinho", "📋 Validação de Receita"])
+# Navegação por Abas
+tab_busca, tab_carrinho = st.tabs(["🔍 Pesquisar Medicamento", f"🛒 Meu Carrinho ({len(st.session_state.carrinho)})"])
 
-catalog = PharmaBackendAPI.get_catalog()
-
-with tab_vitrine:
-    st.subheader("Medicamentos em Destaque")
-    busca = st.text_input("🔍 O que você procura?", placeholder="Ex: Dipirona, Amoxicilina...")
+# ==========================================
+# 4. ABA 1: BUSCA PREDITIVA E COMPARATIVO DE DISTÂNCIA
+# ==========================================
+with tab_busca:
+    st.caption("Digite o nome do medicamento para verificar a disponibilidade nas farmácias próximas:")
     
-    for product in catalog:
-        if busca.lower() in product['nome'].lower():
+    # Seleção digitável (Selectbox com busca por texto)
+    opcoes_meds = ["Selecione ou digite..."] + list(df_meds["nome"].unique())
+    med_selecionado = st.selectbox("Nome do Medicamento:", opcoes_meds, index=0)
+    
+    if med_selecionado != "Selecione ou digite...":
+        # Filtro Pandas
+        info_med = df_meds[df_meds["nome"] == med_selecionado].iloc[0]
+        resultados = pd.merge(df_estoque, df_meds, left_on="med_id", right_on="id")
+        resultados_filtrados = resultados[resultados["nome"] == med_selecionado].sort_values(by="distancia_km")
+        
+        # Painel de Atenção Farmacêutica
+        st.subheader("📋 Informações de Segurança")
+        st.info(f"**Classe:** {info_med['classe']}\n\n**Orientação de Uso:** {info_med['orientacao']}")
+        
+        if info_med['retencao']:
+            st.markdown("""
+            <div class="alert-box">
+                <b>⚠️ Medicamento Sujeito a Controle Especial (RDC 344/98):</b><br>
+                Este item exige a apresentação de receita médica válida e retenção no momento da retirada ou entrega.
+            </div><br>
+            """, unsafe_allow_html=True)
+            
+        st.subheader("🏪 Disponibilidade e Distância")
+        
+        # Exibição dos resultados encontrados nas farmácias
+        for _, row in resultados_filtrados.iterrows():
             with st.container():
                 st.markdown(f"""
-                <div class="product-card">
-                    <b style="font-size:16px;">{product['nome']}</b><br>
-                    <span style="color: #718096; font-size:12px;">Laboratório: {product['lab']}</span><br>
-                    {'<span class="badge-prescricao">📄 Exige Receita</span><br>' if product['requer_receita'] else '<br>'}
-                    <span style="color: #e53e3e; font-size:18px; font-weight:bold;">R$ {product['preco']:.2f}</span>
+                <div class="pharmacy-card">
+                    <b>{row['farmacia']}</b><br>
+                    <span style="color:#555; font-size:13px;">📍 Distância: <b>{row['distancia_km']} km</b> da sua localização</span><br>
+                    <span style="color:#0d5c75; font-weight:bold; font-size:16px;">R$ {row['preco']:.2f}</span>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                if st.button("Adicionar ao Carrinho", key=f"btn_{product['id']}"):
-                    st.session_state.cart.append(product)
-                    st.success(f"Adicionado: {product['nome']}")
+                if st.button(f"Adicionar da {row['farmacia']}", key=f"btn_{row['farmacia']}_{row['id']}"):
+                    item_carrinho = {
+                        "medicamento": row['nome'],
+                        "farmacia": row['farmacia'],
+                        "preco": row['preco'],
+                        "distancia": row['distancia_km'],
+                        "retencao": row['retencao']
+                    }
+                    st.session_state.carrinho.append(item_carrinho)
+                    st.success("Item adicionado ao carrinho de atenção!")
+                    st.rerun()
 
+        # Mapa com as Farmácias que possuem o medicamento
+        st.subheader("🗺️ Localização das Unidades")
+        mapa = folium.Map(location=[-23.5505, -46.6333], zoom_start=13)
+        
+        for _, farm in resultados_filtrados.iterrows():
+            folium.Marker(
+                location=[farm['lat'], farm['lon']],
+                popup=f"{farm['farmacia']} - R$ {farm['preco']:.2f} ({farm['distancia_km']} km)",
+                tooltip=farm['farmacia'],
+                icon=folium.Icon(color="green", icon="plus-sign")
+            ).add_to(mapa)
+            
+        st_folium(mapa, width=700, height=280)
+
+# ==========================================
+# 5. ABA 2: CARRINHO DE ATENÇÃO FARMACÊUTICA
+# ==========================================
 with tab_carrinho:
-    st.subheader("Seu Carrinho de Compras")
-    if not st.session_state.cart:
-        st.info("O carrinho está vazio.")
+    st.subheader("Resumo do Pedido")
+    
+    if not st.session_state.carrinho:
+        st.write("Seu carrinho está vazio. Busque por um medicamento para iniciar.")
     else:
-        total = 0
-        for idx, item in enumerate(st.session_state.cart):
-            st.write(f"- {item['nome']} (**R$ {item['preco']:.2f}**)")
-            total += item['preco']
+        df_carrinho = pd.DataFrame(st.session_state.carrinho)
         
-        st.divider( )
-        st.markdown(f"### Total: R$ {total:.2f}")
+        for idx, item in df_carrinho.iterrows():
+            st.write(f"**{item['medicamento']}**")
+            st.caption(f"Retirada/Entrega: {item['farmacia']} ({item['distancia']} km) — R$ {item['preco']:.2f}")
+            if item['retencao']:
+                st.warning(" Exige Envio de Receita Médica")
+            st.divider()
+            
+        total = df_carrinho["preco"].sum()
+        st.markdown(f"### Total: **R$ {total:.2f}**")
         
-        if st.button("Limpar Carrinho"):
-            st.session_state.cart = []
-            st.rerun()
-
-with tab_validacao:
-    st.subheader("Checkout e Validação Farmacêutica")
-    patient_name = st.text_input("Nome Completo do Paciente")
-    has_prescription = st.checkbox("Possui Receita Médica Válida?")
-    
-    # Campo de upload de imagem para simular o envio da receita médica
-    uploaded_file = st.file_uploader("Enviar Foto da Receita (PDF ou Imagem)", type=["png", "jpg", "jpeg", "pdf"])
-    
-    if st.button("Finalizar Pedido", type="primary"):
-        # Chamada ao "Backend" validando as regras de negócio
-        success, message = PharmaBackendAPI.process_order(
-            st.session_state.cart, 
-            patient_name, 
-            has_prescription or (uploaded_file is not None)
-        )
-        
-        if success:
-            st.success(message)
+        # Envio de receita
+        if any(df_carrinho["retencao"]):
+            st.file_uploader(" Anexar Foto da Receita Médica (Obrigatório)", type=["jpg", "png", "pdf"])
+            
+        if st.button("Confirmar e Enviar para Validação Farmacêutica", type="primary"):
+            st.success("Pedido enviado! O farmacêutico responsável pela unidade analisará sua receita antes da liberação.")
             st.balloons()
-            st.session_state.cart = [] # Limpa o carrinho após finalizar
-        else:
-            st.error(message)
+            st.session_state.carrinho = []
