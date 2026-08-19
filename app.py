@@ -422,11 +422,18 @@ if st.session_state.usuario_perfil == "Cliente":
         st.subheader("Análise Documental Inteligente")
         arquivo_upload = st.file_uploader("Upload da Receita Médica:", type=["png", "jpg", "pdf"])
 
-    # TAB 6: IDENTIDADE E JSON
+# TAB 6: IDENTIDADE E JSON
     with tab_json:
         st.subheader("⚙️ Configurações & Arquitetura JSON do Projeto")
-        json_string = json.dumps(CONFIGURACAO_IDENTIDADE_JSON, indent=4, ensure_ascii=False)
-        st.code(json_string, language="json")
+        
+        # Se CONFIGURACAO_IDENTIDADE_JSON for uma STRING JSON, converta de volta com json.loads
+        if isinstance(CONFIGURACAO_IDENTIDADE_JSON, str):
+            dados_json = json.loads(CONFIGURACAO_IDENTIDADE_JSON)
+        else:
+            dados_json = CONFIGURACAO_IDENTIDADE_JSON
+
+        # Exibe o visualizador nativo interativo do Streamlit
+        st.json(dados_json)
 
 # ==========================================
 # RODAPÉ INFERIOR (ANVISA)
@@ -436,6 +443,6 @@ col_foot_1, col_foot_2, col_foot_3 = st.columns([2, 3, 2])
 with col_foot_2:
     st.image(CONFIGURACAO_IDENTIDADE_JSON["identidade_visual"]["logo_anvisa_url"], width=160)
     st.markdown(
-        "<p class='footer-text'>o nosso projeto segue as determinações da anvisa (agência nacional de vigilância sanitária).</p>",
+        "<p class='footer-text'>Este projeto segue as determinações da anvisa (agência nacional de vigilância sanitária).</p>",
         unsafe_allow_html=True
     )
