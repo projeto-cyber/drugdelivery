@@ -123,23 +123,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. BANCO DE DADOS E ESTRUTURA EXPANDIDA
+# 2. BANCO DE DADOS E ESTRUTURA EXPANDIDA (COM MIGRAÇÃO AUTO)
 # ==========================================
 @st.cache_resource
 def iniciar_banco_dados():
     conexao = sqlite3.connect("farmacia_app.db", check_same_thread=False)
     cursor = conexao.cursor()
     
+    # 1. Cria a tabela caso ela não exista
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS estoque (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
-            principio_ativo TEXT NOT NULL,
-            laboratorio TEXT NOT NULL,
-            concentracao TEXT NOT NULL,
-            apresentacao TEXT NOT NULL,
-            quantidade_embalagem TEXT NOT NULL,
-            tarja TEXT NOT NULL,
+            principio_ativo TEXT DEFAULT '',
+            laboratorio TEXT DEFAULT '',
+            concentracao TEXT DEFAULT '',
+            apresentacao TEXT DEFAULT '',
+            quantidade_embalagem TEXT DEFAULT '',
+            tarja TEXT DEFAULT 'MIP',
             codigo_atc TEXT NOT NULL,
             preco_de REAL NOT NULL,
             preco_por REAL NOT NULL,
@@ -149,10 +150,35 @@ def iniciar_banco_dados():
             em_oferta INTEGER DEFAULT 0,
             distancia_km REAL DEFAULT 0.0,
             loja_parceira TEXT DEFAULT 'Farmácia Central',
-            imagem_url TEXT
+            imagem_url TEXT DEFAULT ''
         )
     """)
     
+    # 2. MIGRAÇÃO DEFENSIVA: Verifica e adiciona colunas novas caso a tabela seja do modelo antigo
+    cursor.execute("PRAGMA table_info(estoque)")
+    colunas_existentes = [coluna[1] for coluna in cursor.fetchall()]
+    
+    colunas_novas = {
+        'principio_ativo': "TEXT DEFAULT ''",
+        'laboratorio': "TEXT DEFAULT ''",
+        'concentracao': "TEXT DEFAULT ''",
+        'apresentacao': "TEXT DEFAULT ''",
+        'quantidade_embalagem': "TEXT DEFAULT ''",
+        'tarja': "TEXT DEFAULT 'MIP'",
+        'preco_de': "REAL DEFAULT 0.0",
+        'preco_por': "REAL DEFAULT 0.0",
+        'quantidade_estoque': "INTEGER DEFAULT 0",
+        'imagem_url': "TEXT DEFAULT ''",
+        'em_oferta': "INTEGER DEFAULT 0",
+        'distancia_km': "REAL DEFAULT 0.0",
+        'loja_parceira': "TEXT DEFAULT 'Farmácia Central'"
+    }
+    
+    for coluna, tipo in colunas_novas.items():
+        if coluna not in colunas_existentes:
+            cursor.execute(f"ALTER TABLE estoque ADD COLUMN {coluna} {tipo}")
+            
+    # Criação da tabela de vendas
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS vendas_registro (
             id_venda INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,8 +194,12 @@ def iniciar_banco_dados():
     """)
     conexao.commit()
     
-    cursor.execute("SELECT COUNT(*) FROM estoque")
+    # 3. Se a base estiver vazia ou foi migrada sem dados novos, insere a carga padrão
+    cursor.execute("SELECT COUNT(*) FROM estoque WHERE principio_ativo != ''")
     if cursor.fetchone()[0] == 0:
+        # Limpa registros antigos incompletos para garantir integridade visual
+        cursor.execute("DELETE FROM estoque")
+        
         medicamentos_carga = [
             ("Ibuprofeno", "Ibuprofeno", "EMS", "600mg", "Comprimidos Revestidos", "Caixa com 20 comprimidos", "MIP", "M01AE", 24.90, 16.90, 45, 0, "Anti-inflamatório", 1, 0.8, "Drogaria São Paulo - Centro", "https://img.freepik.com/vetores-gratis/ilustracao-de-design-plano-de-caixa-de-remedio_23-2149363062.jpg"),
             ("Dipirona Monoidratada", "Dipirona Monoidratada", "Medley", "1g", "Comprimidos Desintegráveis", "Caixa com 10 comprimidos", "MIP", "N02BB", 14.50, 8.90, 120, 0, "Analgésico e Antitérmico", 1, 1.2, "Droga Raia - Pinheiros", "https://img.freepik.com/vetores-gratis/pacote-de-pílulas-e-frasco_24908-59265.jpg"),
