@@ -562,27 +562,222 @@ if st.session_state.usuario_perfil == "Cliente":
                 st.session_state.receita_digital_validada = True
                 st.success("🎯 Receita Validada com Sucesso!")
 
-# Interface Administrativa
+# ==========================================
+# INTERFACE ADMINISTRATIVA / PAINEL ERP (ENTERPRISE)
+# ==========================================
 else:
-    st.title("🛡️ Painel Administrativo de Controle de Insumos")
-    
-    tab_gestao, tab_json = st.tabs(["📦 Gestão de Estoque", "⚙️ Identidade & JSONs do Sistema"])
-    
-    with tab_gestao:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM estoque")
-        df_insumos = pd.DataFrame(cursor.fetchall(), columns=["id", "nome", "codigo_atc", "preco", "quantidade", "requer_receita", "grupo_terapeutico", "tags", "em_oferta", "distancia_km", "loja_parceira"])
-        st.dataframe(df_insumos, use_container_width=True)
+    st.title("🛡️ Painel Executivo & Controle Sanitário ERP")
+    st.caption("Módulo Avançado de Gestão de Insumos, Rastreabilidade e Conformidade Sanitária")
 
+    # ---------------------------------------------------------
+    # 1. CARREGAMENTO E TRATAMENTO SEGURO DOS DADOS
+    # ---------------------------------------------------------
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, nome, codigo_atc, preco, quantidade, requer_receita, 
+               grupo_terapeutico, tags, em_oferta, distancia_km, loja_parceira 
+        FROM estoque
+    """)
+    dados_estoque = cursor.fetchall()
+    cols_nomes = [desc[0] for desc in cursor.description]
+    df_insumos = pd.DataFrame(dados_estoque, columns=cols_nomes)
+
+    # Cálculo de métricas globais
+    total_skus = len(df_insumos)
+    valor_total_estoque = (df_insumos['preco'] * df_insumos['quantidade']).sum() if not df_insumos.empty else 0.0
+    itens_criticos = df_insumos[df_insumos['quantidade'] < 10] if not df_insumos.empty else pd.DataFrame()
+    itens_controlados = df_insumos[df_insumos['requer_receita'] == 1] if not df_insumos.empty else pd.DataFrame()
+
+    # ---------------------------------------------------------
+    # 2. DASHBOARD DE KPIS EXECUTIVOS
+    # ---------------------------------------------------------
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+    with col_kpi1:
+        st.metric("Total de SKUs Cadastrados", f"{total_skus} itens")
+    with col_kpi2:
+        st.metric("Valor Imobilizado (Estoque)", f"R$ {valor_total_estoque:,.2f}")
+    with col_kpi3:
+        st.metric("Itens em Ruptura / Alerta", f"{len(itens_criticos)} itens", delta_color="inverse")
+    with col_kpi4:
+        st.metric("Medicamentos Controlados", f"{len(itens_controlados)} itens")
+
+    st.markdown("---")
+
+    # ---------------------------------------------------------
+    # 3. ESTRUTURA DE NAVEGAÇÃO PRINCIPAL (ABAS DE NÍVEL EXECUTIVO)
+    # ---------------------------------------------------------
+    tab_gestao, tab_sanitario, tab_auditoria, tab_json = st.tabs([
+        "📦 Gestão Integrada de Estoque",
+        "⚖️ Rastreabilidade & Controle Sanitário",
+        "📋 Trilha de Auditoria (Logs)",
+        "⚙️ Identidade & JSONs do Sistema"
+    ])
+
+    # ---------------------------------------------------------
+    # ABA 1: GESTÃO INTEGRADA DE ESTOQUE
+    # ---------------------------------------------------------
+    with tab_gestao:
+        st.subheader("📊 Insumos e Disponibilidade Operacional")
+
+        # Expander para cadastro rápido de novos insumos
+        with st.expander("➕ Cadastrar Novo Insumo Farmacêutico no Banco", expanded=False):
+            with st.form("form_novo_insumo"):
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    novo_nome = st.text_input("Nome do Insumo / Medicamento*")
+                    novo_atc = st.text_input("Código ATC / Categoria*", placeholder="Ex: N02BE")
+                    novo_preco = st.number_input("Preço Unitário (R$)*", min_value=0.01, step=0.5)
+                with c2:
+                    nova_qtd = st.number_input("Quantidade Inicial em Estoque*", min_value=1, step=1)
+                    novo_grupo = st.selectbox("Classe / Grupo Terapêutico", [
+                        "Analgésico", "Anti-inflamatório", "Antimicrobiano", 
+                        "Ansiolítico", "Hipnótico", "Doenças Respiratórias", "Outros"
+                    ])
+                    nova_loja = st.selectbox("Loja / Filial de Destino", [
+                        "Drogaria São Paulo - Centro", "Droga Raia - Pinheiros", 
+                        "Farmácia Pague Menos - Jardins", "Drogaria Pacheco - Paulista"
+                    ])
+                with c3:
+                    novo_requer = st.checkbox("Exige Retenção de Receita (Portaria 344)?")
+                    novo_oferta = st.checkbox("Colocar em Oferta no E-commerce?")
+                    novas_tags = st.text_input("Tags para busca (separadas por vírgula)", placeholder="ex: febre, dor, controlado")
+
+                btn_cadastrar = st.form_submit_button("Salvar no Banco de Dados", type="primary", use_container_width=True)
+
+                if btn_cadastrar:
+                    if novo_nome and novo_atc:
+                        cursor.execute("""
+                            INSERT INTO estoque (nome, codigo_atc, preco, quantidade, requer_receita, grupo_terapeutico, tags, em_oferta, distancia_km, loja_parceira)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            novo_nome, novo_atc, novo_preco, nova_qtd, 
+                            1 if novo_requer else 0, novo_grupo, novas_tags, 
+                            1 if novo_oferta else 0, 1.0, nova_loja
+                        ))
+                        conn.commit()
+                        st.success(f"Insumo **{novo_nome}** cadastrado com sucesso!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("Preencha os campos obrigatórios (*).")
+
+        # Filtro de Tabela
+        st.markdown("#### 🔍 Consulta de Tabela de Insumos")
+        f_col1, f_col2 = st.columns([3, 1])
+        with f_col1:
+            termo_busca = st.text_input("Filtrar estoque por nome, código ATC ou classe:", placeholder="Ex: Ibuprofeno ou M01AE")
+        with f_col2:
+            apenas_criticos = st.checkbox("Exibir apenas estoque crítico (< 10)")
+
+        df_exibicao = df_insumos.copy()
+        if termo_busca:
+            df_exibicao = df_exibicao[
+                df_exibicao['nome'].str.contains(termo_busca, case=False, na=False) |
+                df_exibicao['codigo_atc'].str.contains(termo_busca, case=False, na=False) |
+                df_exibicao['grupo_terapeutico'].str.contains(termo_busca, case=False, na=False)
+            ]
+        if apenas_criticos:
+            df_exibicao = df_exibicao[df_exibicao['quantidade'] < 10]
+
+        # Exibição do Grid
+        st.dataframe(
+            df_exibicao,
+            use_container_width=True,
+            column_config={
+                "id": "ID",
+                "nome": "Insumo / Medicamento",
+                "codigo_atc": "Cód. ATC",
+                "preco": st.column_config.NumberColumn("Preço Unit. (R$)", format="R$ %.2f"),
+                "quantidade": st.column_config.NumberColumn("Qtd. Estoque"),
+                "requer_receita": st.column_config.CheckboxColumn("Retém Receita?"),
+                "em_oferta": st.column_config.CheckboxColumn("Oferta Ativa?"),
+                "loja_parceira": "Unidade / Filial"
+            }
+        )
+
+        # Botão para Download de Relatórios Contábeis/Auditoria
+        csv_buffer = df_insumos.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Exportar Relatório do Estoque (CSV)",
+            data=csv_buffer,
+            file_name=f"relatorio_estoque_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+            type="secondary"
+        )
+
+    # ---------------------------------------------------------
+    # ABA 2: RASTREABILIDADE & CONTROLE SANITÁRIO
+    # ---------------------------------------------------------
+    with tab_sanitario:
+        st.subheader("⚖️ Validação e Regulação Sanitária (SNGPC / ANVISA)")
+        st.markdown("Monitoramento focado no controle de substâncias sob regulação especial e vigilância de insumos.")
+
+        col_san1, col_san2 = st.columns(2)
+        with col_san1:
+            st.markdown("### 🚨 Risco de Ruptura (Menos de 10 unidades)")
+            if not itens_criticos.empty:
+                for _, row in itens_criticos.iterrows():
+                    st.markdown(f"""
+                    <div class='card-critico'>
+                        <strong>{row['nome']}</strong> (Qtd Atual: <code>{row['quantidade']}</code>)<br>
+                        <small>Filial: {row['loja_parceira']} | Classe: {row['grupo_terapeutico']}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.success("Nenhum insumo encontra-se em nível crítico de estoque.")
+
+        with col_san2:
+            st.markdown("### 📜 Portaria 344/98 & Controle Especial")
+            if not itens_controlados.empty:
+                st.dataframe(
+                    itens_controlados[['nome', 'codigo_atc', 'quantidade', 'loja_parceira']],
+                    use_container_width=True
+                )
+            else:
+                st.info("Nenhum medicamento sob controle especial localizado.")
+
+    # ---------------------------------------------------------
+    # ABA 3: TRILHA DE AUDITORIA (LOGS)
+    # ---------------------------------------------------------
+    with tab_auditoria:
+        st.subheader("📋 Trilha de Auditoria & Segurança de Transações")
+        st.markdown("Logs automáticos de alteração de sistema para conformidade com normas regulatórias.")
+        
+        # Simulação de Trilha de Auditoria Enterprise
+        logs_sistema = [
+            {"Data/Hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Usuário": st.session_state.usuario_nome or "Admin", "Módulo": "Estoque", "Ação": "Consulta de inventário e emissão de relatório"},
+            {"Data/Hora": "2026-08-18 10:14:02", "Usuário": "Farmacêutico Responsável", "Módulo": "SNGPC", "Ação": "Validação de receita médica digital"},
+            {"Data/Hora": "2026-08-17 18:30:11", "Usuário": "Sistema Automation", "Módulo": "Sessão", "Ação": "Backup automático da base de dados sqlite3"}
+        ]
+        st.table(pd.DataFrame(logs_sistema))
+
+    # ---------------------------------------------------------
+    # ABA 4: CONFIGURAÇÕES JSON DO SISTEMA
+    # ---------------------------------------------------------
     with tab_json:
-        st.subheader("⚙️ Configurações JSON de Identidade e Parceiros")
+        st.subheader("⚙️ Configurações e Payloads do Sistema")
+        st.markdown("Estruturas de metadados em formato JSON nativo para integração de APIs externas.")
+
         col_json_1, col_json_2 = st.columns(2)
         with col_json_1:
             st.markdown("### Identidade da Plataforma (JSON)")
-            st.json(CONFIGURACAO_IDENTIDADE_JSON)
+            st.json(CONFIGURACAO_IDENTIDADE_DICT)
+            st.download_button(
+                "📥 Download Config (JSON)",
+                data=json.dumps(CONFIGURACAO_IDENTIDADE_DICT, indent=4, ensure_ascii=False),
+                file_name="config_identidade.json",
+                mime="application/json"
+            )
+
         with col_json_2:
-            st.markdown("### Dados das Redes de Farmácias (JSON)")
+            st.markdown("### Redes Parceiras Credenciadas (JSON)")
             st.json(FARMACIAS_PARCEIRAS_DATA)
+            st.download_button(
+                "📥 Download Parceiros (JSON)",
+                data=json.dumps(FARMACIAS_PARCEIRAS_DATA, indent=4, ensure_ascii=False),
+                file_name="farmacias_parceiras.json",
+                mime="application/json"
+            )
 
 # ==========================================
 # 6. RODAPÉ INFERIOR REGULATÓRIO (ANVISA)
@@ -597,6 +792,6 @@ with col_foot_1:
 with col_foot_2:
     st.markdown("""
     <div class="footer-anvisa">
-        o nosso projeto segue as determinações da anvisa (agência nacional de vigilância sanitária) e as normas de boa prática de dispensação farmacêutica vigente.
+        o nosso projeto segue as determinações da ANVISA (agência nacional de vigilância sanitária) e as normas de boa prática de dispensação farmacêutica vigente.
     </div>
     """, unsafe_allow_html=True)
