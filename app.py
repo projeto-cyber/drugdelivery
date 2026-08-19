@@ -1,12 +1,14 @@
-import streamlit as st
-import pandas as pd
-import sqlite3
+import os
 import io
+import json
 import time
+import sqlite3
 from datetime import datetime
+import pandas as pd
+import streamlit as st
 
 # ==========================================
-# CONFIGURAÇÃO DE LAYOUT E ESTILO DA PÁGINA
+# 1. CONFIGURAÇÃO DE LAYOUT E ESTILO DA PÁGINA
 # ==========================================
 st.set_page_config(
     page_title="PharmaStream Pro - Vendas & Gestão",
@@ -15,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeção de estilo customizado
+# Estilo customizado (CSS)
 st.markdown("""
 <style>
     .card-critico {
@@ -48,11 +50,19 @@ st.markdown("""
         font-size: 0.8em;
         font-weight: bold;
     }
+    .footer-anvisa {
+        text-align: center;
+        font-size: 0.78em;
+        color: #555555;
+        margin-top: 50px;
+        padding: 15px;
+        border-top: 1px solid #E0E0E0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# CONEXÃO E INICIALIZAÇÃO DO BANCO DE DADOS
+# 2. CONEXÃO E INICIALIZAÇÃO DO BANCO DE DADOS
 # ==========================================
 @st.cache_resource
 def iniciar_banco_dados():
@@ -69,11 +79,25 @@ def iniciar_banco_dados():
             quantidade INTEGER NOT NULL,
             requer_receita INTEGER NOT NULL,
             grupo_terapeutico TEXT NOT NULL,
-            tags TEXT
+            tags TEXT,
+            em_oferta INTEGER DEFAULT 0,
+            distancia_km REAL DEFAULT 0.0,
+            loja_parceira TEXT DEFAULT 'Farmácia Central'
         )
     """)
     
-    # Criar tabela de auditoria de vendas transacionais
+    # Migrações defensivas para colunas ausentes
+    cursor.execute("PRAGMA table_info(estoque)")
+    colunas_existentes = [coluna[1] for coluna in cursor.fetchall()]
+    
+    if 'em_oferta' not in colunas_existentes:
+        cursor.execute("ALTER TABLE estoque ADD COLUMN em_oferta INTEGER DEFAULT 0")
+    if 'distancia_km' not in colunas_existentes:
+        cursor.execute("ALTER TABLE estoque ADD COLUMN distancia_km REAL DEFAULT 0.0")
+    if 'loja_parceira' not in colunas_existentes:
+        cursor.execute("ALTER TABLE estoque ADD COLUMN loja_parceira TEXT DEFAULT 'Farmácia Central'")
+        
+    # Criar tabela de auditoria de vendas
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS vendas_registro (
             id_venda INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,22 +114,22 @@ def iniciar_banco_dados():
     """)
     conexao.commit()
     
-    # Alimentação inicial da tabela de estoque
+    # Alimentação inicial do estoque
     cursor.execute("SELECT COUNT(*) FROM estoque")
     if cursor.fetchone()[0] == 0:
         medicamentos_carga = [
-            ("Ibuprofeno 600mg", "M01AE", 18.50, 45, 0, "Anti-inflamatório", "dor, inflamacao, febre"),
-            ("Dipirona Monoidratada 1g", "N02BB", 9.90, 120, 0, "Analgésico", "dor, febre"),
-            ("Diazepam 10mg", "N05B", 24.50, 12, 1, "Ansiolítico", "ansiedade, sono, controlado"),
-            ("Clonazepam 2mg", "N05B", 21.00, 8, 1, "Ansiolítico", "ansiedade, controlado"),
-            ("Zolpidem 10mg", "N05C", 42.00, 15, 1, "Hipnótico", "sono, insomnia, controlado"),
-            ("Cloridrato de Loratadina 10mg", "R06", 14.80, 55, 0, "Anti-histamínico", "alergia, rinite"),
-            ("Sulfato de Salbutamol 100mcg", "R03", 32.00, 22, 0, "Doenças Respiratórias", "asma, bronquite"),
-            ("Paracetamol 750mg", "N02BE", 11.20, 95, 0, "Analgésico", "dor, febre")
+            ("Ibuprofeno 600mg", "M01AE", 18.50, 45, 0, "Anti-inflamatório", "dor, inflamacao, febre", 1, 1.2, "Drogaria São Paulo - Centro"),
+            ("Dipirona Monoidratada 1g", "N02BB", 9.90, 120, 0, "Analgésico", "dor, febre", 1, 2.5, "Farmácia Pague Menos - Jardins"),
+            ("Diazepam 10mg", "N05B", 24.50, 12, 1, "Ansiolítico", "ansiedade, sono, controlado", 0, 3.1, "Droga Raia - Pinheiros"),
+            ("Clonazepam 2mg", "N05B", 21.00, 8, 1, "Ansiolítico", "ansiedade, controlado", 1, 0.8, "Drogaria São Paulo - Centro"),
+            ("Zolpidem 10mg", "N05C", 42.00, 15, 1, "Hipnótico", "sono, insomnia, controlado", 0, 4.0, "Drogaria Pacheco - Paulista"),
+            ("Cloridrato de Loratadina 10mg", "R06", 14.80, 55, 0, "Anti-histamínico", "alergia, rinite", 1, 1.8, "Droga Raia - Pinheiros"),
+            ("Sulfato de Salbutamol 100mcg", "R03", 32.00, 22, 0, "Doenças Respiratórias", "asma, bronquite", 0, 2.1, "Farmácia Pague Menos - Jardins"),
+            ("Paracetamol 750mg", "N02BE", 11.20, 95, 0, "Analgésico", "dor, febre", 1, 0.5, "Drogaria São Paulo - Centro")
         ]
         cursor.executemany("""
-            INSERT INTO estoque (nome, codigo_atc, preco, quantidade, requer_receita, grupo_terapeutico, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO estoque (nome, codigo_atc, preco, quantidade, requer_receita, grupo_terapeutico, tags, em_oferta, distancia_km, loja_parceira)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, medicamentos_carga)
         conexao.commit()
         
@@ -114,7 +138,7 @@ def iniciar_banco_dados():
 conn = iniciar_banco_dados()
 
 # ==========================================
-# CONTROLE DO ESTADO DE SESSÃO
+# 3. CONTROLE DE ESTADO DE SESSÃO & DADOS JSON
 # ==========================================
 if "carrinho_vendas" not in st.session_state:
     st.session_state.carrinho_vendas = []
@@ -132,16 +156,51 @@ if "receita_digital_validada" not in st.session_state:
     st.session_state.receita_digital_validada = False
 if "dados_ocr_receita" not in st.session_state:
     st.session_state.dados_ocr_receita = None
+if "farmacias_favoritas" not in st.session_state:
+    st.session_state.farmacias_favoritas = set()
 
 # Base de Cupons Válidos
 CUPONS_VALIDOS = {
-    "CLIENTE10": 0.10,   # 10% de desconto
-    "PHARMA15": 0.15,    # 15% de desconto
-    "PRIMEIRACOMPRA": 0.20 # 20% de desconto
+    "CLIENTE10": 0.10,
+    "PHARMA15": 0.15,
+    "PRIMEIRACOMPRA": 0.20
+}
+
+# Dados em formato JSON de Identidade Institucional & Farmácias Parceiras
+CONFIGURACAO_IDENTIDADE_JSON = json.dumps({
+    "nome_plataforma": "PharmaStream Pro",
+    "versao": "2.4.0",
+    "regulacao": "ANVISA",
+    "ambiente": "Produção",
+    "suporte_emergencial": "0800-777-PHARMA",
+    "temas": {
+        "cor_primaria": "#09AB3B",
+        "cor_secundaria": "#2196F3",
+        "alerta": "#FF4B4B"
+    }
+}, indent=4, ensure_ascii=False)
+
+FARMACIAS_PARCEIRAS_DATA = [
+    {"id": 1, "nome": "Drogaria São Paulo - Centro", "lat": -23.5505, "lon": -46.6333, "distancia_km": 0.8, "tem_ofertas": True, "avaliacao": 4.8},
+    {"id": 2, "nome": "Droga Raia - Pinheiros", "lat": -23.5615, "lon": -46.6822, "distancia_km": 1.8, "tem_ofertas": True, "avaliacao": 4.9},
+    {"id": 3, "nome": "Farmácia Pague Menos - Jardins", "lat": -23.5685, "lon": -46.6598, "distancia_km": 2.5, "tem_ofertas": True, "avaliacao": 4.6},
+    {"id": 4, "nome": "Drogaria Pacheco - Paulista", "lat": -23.5614, "lon": -46.6558, "distancia_km": 4.0, "tem_ofertas": False, "avaliacao": 4.5}
+]
+
+# Estutura Completa de Categorias Solicitadas
+ESTRUTURA_CATEGORIAS = {
+    "Saúde": ["Teste Rápido", "Saúde Bucal", "Produtos de Beleza", "Dispositivos Médicos", "Fraldas"],
+    "Medicamentos": ["Medicamentos Controlados", "Hormônios", "Antimicrobianos", "Fitoterápicos", "Medicamentos Isentos de Prescrição"],
+    "Vitaminas e Suplementos": ["Multivitamínicos", "Vitaminas", "Minerais"],
+    "Mamãe & Bebê": ["Fraldas", "Amamentação", "Saúde da Mãe", "Saúde do Bebê"],
+    "Beleza": ["Cuidado com a Pele", "Maquiagem", "Perfumaria", "Tratamento Capilar", "Produtos Asiáticos"],
+    "Cuidados Diários": ["Higiene Pessoal", "Depilação", "Repelente", "Cuidado Masculino", "Cuidado Feminino", "Cuidado com a Pele", "Cuidado com os Pés"],
+    "Pet": ["Medicamentos Pet", "Vida Saudável Pet"],
+    "Marcas Parceiras": ["Marca A", "Marca B", "Marca C"]
 }
 
 # ==========================================
-# SISTEMA DE LOGIN E CONTROLE DE ACESSO
+# 4. FUNÇÕES DE AUTENTICAÇÃO E NEGÓCIO
 # ==========================================
 def gerenciar_autenticacao():
     st.sidebar.subheader("🔒 Autenticação & Perfil")
@@ -177,9 +236,6 @@ def gerenciar_autenticacao():
             st.session_state.percentual_desconto = 0.0
             st.rerun()
 
-# ==========================================
-# LÓGICAS COMERCIAIS E FLUXO DO CARRINHO
-# ==========================================
 def inserir_produto_carrinho(id_prod, nome, preco, requer_receita):
     for item in st.session_state.carrinho_vendas:
         if item["id"] == id_prod:
@@ -205,15 +261,11 @@ def atualizar_quantidade_carrinho(index, nova_qtd):
 
 def calcular_resumo_financeiro():
     subtotal = sum(item["preco"] * item["quantidade"] for item in st.session_state.carrinho_vendas)
-    
-    # Aplicação de Desconto por Cupom
     valor_desconto = subtotal * st.session_state.percentual_desconto
     subtotal_com_desconto = subtotal - valor_desconto
-    
-    impostos = subtotal_com_desconto * 0.08  # Alíquota média de 8%
+    impostos = subtotal_com_desconto * 0.08
     taxa_entrega = 12.00 if subtotal > 0 else 0.0
     valor_total = subtotal_com_desconto + impostos + taxa_entrega
-    
     return subtotal, valor_desconto, impostos, taxa_entrega, valor_total
 
 def limpar_sessao_compra():
@@ -223,13 +275,9 @@ def limpar_sessao_compra():
     st.session_state.cupom_aplicado = None
     st.session_state.percentual_desconto = 0.0
 
-# ==========================================
-# SISTEMA DE RECOMENDAÇÃO INTELIGENTE
-# ==========================================
 def obter_recomendacoes_atc(carrinho_atual):
     if not carrinho_atual:
         return []
-        
     cursor = conn.cursor()
     nomes_carrinho = [item["nome"] for item in carrinho_atual]
     cursor.execute("SELECT * FROM estoque WHERE quantidade > 5 LIMIT 4")
@@ -238,23 +286,21 @@ def obter_recomendacoes_atc(carrinho_atual):
     return recomendados[:3]
 
 # ==========================================
-# RENDERIZAÇÃO DAS INTERFACES (VIEWS)
+# 5. RENDERIZAÇÃO DAS VISÕES E ABAS
 # ==========================================
 gerenciar_autenticacao()
 
-# Interface do Cliente
 if st.session_state.usuario_perfil == "Cliente":
     st.title("🛒 PharmaStream - E-Commerce de Saúde")
     
-    # HEADER SUPERIOR COM ÍCONE DO CARRINHO INTERATIVO E NAVEGAÇÃO DE COMPRAS
+    # Cabeçalho Superior
     col_head_1, col_head_2 = st.columns([3, 1])
     with col_head_1:
-        st.markdown("Encontre seus medicamentos de uso diário, envie receitas e finalize suas compras com entrega rápida.")
+        st.markdown("Encontre seus medicamentos, produtos de saúde e receba em casa com entrega orientada pela farmácia mais próxima.")
     with col_head_2:
         qtd_itens_total = sum(item["quantidade"] for item in st.session_state.carrinho_vendas)
         sub_temp, desc_temp, imp_temp, frete_temp, total_temp = calcular_resumo_financeiro()
         
-        # Ícone Popover de Carrinho Dinâmico
         with st.popover(f"🛒 Carrinho ({qtd_itens_total}) - R$ {total_temp:.2f}", use_container_width=True):
             st.markdown("### 🛒 Resumo Rápido do Carrinho")
             if not st.session_state.carrinho_vendas:
@@ -267,22 +313,112 @@ if st.session_state.usuario_perfil == "Cliente":
                     st.write(f"🏷️ **Desconto:** -R$ {desc_temp:.2f}")
                 st.write(f"📦 **Frete estimado:** R$ {frete_temp:.2f}")
                 st.markdown(f"#### **Total: R$ {total_temp:.2f}**")
-                
-                st.markdown("---")
-                st.markdown("**💳 Formas de Pagamento Aceitas:**")
-                st.caption("• PIX (Aprovação Imediata + 5% OFF)\n• Cartão de Crédito (até 6x sem juros)\n• Cartão de Débito\n• Boleto Bancário")
 
-    # Banners de Ofertas para Usuários Logados
+    # Banner de Boas-Vindas
     if st.session_state.usuario_logado:
-        st.info(f"🎉 **Ofertas Exclusivas para {st.session_state.usuario_nome}!** Use o cupom **CLIENTE10** para 10% OFF ou **PHARMA15** para 15% OFF em todo o site!")
+        st.info(f"🎉 **Ofertas Exclusivas para {st.session_state.usuario_nome}!** Use o cupom **CLIENTE10** para 10% OFF ou **PHARMA15** para 15% OFF!")
 
-    tab_catalogo, tab_carrinho, tab_receitas = st.tabs([
-        "💊 Catálogo de Medicamentos",
+    # Estruturação das Abas Principais
+    tab_ofertas, tab_categorias, tab_mapa, tab_catalogo, tab_carrinho, tab_receitas = st.tabs([
+        "🔥 Ofertas em Destaque",
+        "📂 Todas as Categorias",
+        "📍 Buscar Farmácias & Mapa",
+        "💊 Catálogo Geral",
         f"🛒 Meu Carrinho ({qtd_itens_total})",
         "📄 Validação de Prescrições"
     ])
-    
-    # TAB 1: CATÁLOGO DE PRODUTOS
+
+    # --- ABA 1: OFERTAS EM DESTAQUE (Alinhamento por Nome e Distância) ---
+    with tab_ofertas:
+        st.subheader("🔥 Ofertas Especiais Ordenadas por Proximidade")
+        
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, nome, preco, quantidade, requer_receita, grupo_terapeutico, em_oferta, distancia_km, loja_parceira
+                FROM estoque 
+                WHERE em_oferta = 1 
+                ORDER BY distancia_km ASC
+            """)
+            ofertas = cursor.fetchall()
+        except sqlite3.OperationalError:
+            ofertas = []
+
+        if ofertas:
+            colunas_ofertas = st.columns(3)
+            for idx, item in enumerate(ofertas):
+                id_o, nome_o, preco_o, qtd_o, req_rec_o, grupo_o, em_of_o, dist_o, loja_o = item
+                coluna_atual = colunas_ofertas[idx % 3]
+                
+                with coluna_atual:
+                    with st.container(border=True):
+                        st.markdown(f"<span class='oferta-badge'>OFERTA</span>", unsafe_allow_html=True)
+                        st.subheader(nome_o)
+                        st.markdown(f"🏪 **Loja Parceira:** {loja_o}")
+                        st.markdown(f"📍 **Distância:** `{dist_o:.1f} km de você`")
+                        st.markdown(f"**Classe:** {grupo_o}")
+                        
+                        preco_final = preco_o * 0.85 # 15% OFF nas ofertas
+                        st.markdown(f"### R$ {preco_final:.2f} <span style='font-size:0.6em; color:gray; text-decoration:line-through;'>R$ {preco_o:.2f}</span>", unsafe_allow_html=True)
+                        
+                        if st.button("Adicionar Oferta 🛒", key=f"btn_oferta_{id_o}", use_container_width=True):
+                            inserir_produto_carrinho(id_o, nome_o, preco_final, req_rec_o)
+                            st.rerun()
+        else:
+            st.info("Nenhuma oferta promocional disponível no momento.")
+
+    # --- ABA 2: TODAS AS CATEGORIAS ---
+    with tab_categorias:
+        st.subheader("📂 Navegue por Categorias de Produtos")
+        
+        cat_selecionada = st.selectbox("Selecione uma Categoria Principal:", list(ESTRUTURA_CATEGORIAS.keys()))
+        subcategorias = ESTRUTURA_CATEGORIAS[cat_selecionada]
+        
+        st.markdown(f"### Subcategorias de **{cat_selecionada}**")
+        cols_sub = st.columns(len(subcategorias) if len(subcategorias) <= 4 else 4)
+        
+        for idx_sub, sub_nome in enumerate(subcategorias):
+            with cols_sub[idx_sub % 4]:
+                with st.container(border=True):
+                    st.markdown(f"#### 🏷️ {sub_nome}")
+                    st.caption(f"Explorar itens em {sub_nome}")
+                    if st.button(f"Ver {sub_nome}", key=f"cat_btn_{cat_selecionada}_{idx_sub}", use_container_width=True):
+                        st.toast(f"Filtrando produtos para: {sub_nome}")
+
+    # --- ABA 3: MAPA E BUSCA DE FARMÁCIAS (Favoritos e Ofertas) ---
+    with tab_mapa:
+        st.subheader("📍 Farmácias Parceiras e Distância em Tempo Real")
+        st.markdown("Selecione sua farmácia de preferência e veja quais estão concedendo descontos especiais no mapa.")
+        
+        col_map_1, col_map_2 = st.columns([2, 1])
+        
+        df_mapa = pd.DataFrame(FARMACIAS_PARCEIRAS_DATA)
+        
+        with col_map_1:
+            st.map(df_mapa, latitude="lat", longitude="lon", size="distancia_km", zoom=12)
+            
+        with col_map_2:
+            st.markdown("### 🏪 Redes Credenciadas")
+            for farm in FARMACIAS_PARCEIRAS_DATA:
+                is_fav = farm["id"] in st.session_state.farmacias_favoritas
+                estrela = "⭐" if is_fav else "☆"
+                badge_desconto = "🏷️ **OFERTAS ATIVAS**" if farm["tem_ofertas"] else "Sem ofertas ativas"
+                
+                with st.container(border=True):
+                    col_f1, col_f2 = st.columns([3, 1])
+                    with col_f1:
+                        st.markdown(f"**{farm['nome']}**")
+                        st.caption(f"Distância: {farm['distancia_km']} km | Avaliação: {farm['avaliacao']} ★")
+                        st.markdown(f"<small>{badge_desconto}</small>", unsafe_allow_html=True)
+                    with col_f2:
+                        if st.button(f"{estrela}", key=f"fav_{farm['id']}"):
+                            if is_fav:
+                                st.session_state.farmacias_favoritas.remove(farm["id"])
+                            else:
+                                st.session_state.farmacias_favoritas.add(farm["id"])
+                            st.rerun()
+
+    # --- ABA 4: CATÁLOGO GERAL DE MEDICAMENTOS ---
     with tab_catalogo:
         col_filtro_1, col_filtro_2 = st.columns([2, 1])
         with col_filtro_1:
@@ -310,37 +446,34 @@ if st.session_state.usuario_perfil == "Cliente":
             st.write("### Produtos Encontrados")
             colunas_grade = st.columns(3)
             for idx, prod in enumerate(produtos):
-                id_p, nome_p, atc_p, preco_p, estoque_p, requer_rec_p, grupo_p, tags_p = prod
+                id_p, nome_p, atc_p, preco_p, estoque_p, requer_rec_p, grupo_p, tags_p, em_of_p, dist_p, loja_p = prod
                 coluna_atual = colunas_grade[idx % 3]
                 
                 with coluna_atual:
                     with st.container(border=True):
                         if requer_rec_p == 1:
-                            st.error("🟥 Retenção de Receita Exigida")
+                            st.error("Reter Receita Exigida")
                         else:
-                            st.success("🟩 Medicamento Liberado (OTC)")
+                            st.success("Medicamento Liberado (OTC)")
                             
                         st.subheader(nome_p)
                         st.markdown(f"**Indicação:** {grupo_p}")
                         st.markdown(f"**Classe ATC:** `{atc_p}`")
                         
-                        # Destaque de Preço Promocional se Logado
                         if st.session_state.usuario_logado:
                             preco_desc = preco_p * 0.9
                             st.markdown(f"### R$ {preco_desc:.2f} <span class='oferta-badge'>10% OFF</span>", unsafe_allow_html=True)
-                            st.caption(f"De R$ {preco_p:.2f} por estar logado(a)")
                         else:
                             st.markdown(f"### R$ {preco_p:.2f}")
                         
-                        adicionar_clique = st.button(f"Comprar 🛒", key=f"compra_{id_p}", use_container_width=True)
-                        if adicionar_clique:
+                        if st.button(f"Comprar 🛒", key=f"compra_{id_p}", use_container_width=True):
                             preco_final_item = preco_p * 0.9 if st.session_state.usuario_logado else preco_p
                             inserir_produto_carrinho(id_p, nome_p, preco_final_item, requer_rec_p)
                             st.rerun()
         else:
-            st.info("Nenhum medicamento correspondente localizado.")
-            
-    # TAB 2: CARRINHO DE COMPRAS E CHECKOUT
+            st.info("Nenhum medicamento localizado.")
+
+    # --- ABA 5: CARRINHO E CHECKOUT ---
     with tab_carrinho:
         st.subheader("Carrinho de Compras")
         
@@ -363,18 +496,15 @@ if st.session_state.usuario_perfil == "Cliente":
                         atualizar_quantidade_carrinho(idx, quantidade_selecionada)
                         st.rerun()
                 with col_item_4:
-                    valor_multiplicado = item["preco"] * item["quantidade"]
-                    st.write(f"**R$ {valor_multiplicado:.2f}**")
+                    st.write(f"**R$ {item['preco'] * item['quantidade']:.2f}**")
             st.markdown("---")
             
-            # Seção de Ofertas e Cupons de Desconto
+            # Cupons
             st.markdown("### 🎟️ Cupons e Ofertas")
-            if not st.session_state.usuario_logado:
-                st.warning("💡 **Faça login** para desbloquear cupons de desconto exclusivos e ofertas especiais de cliente!")
-            else:
+            if st.session_state.usuario_logado:
                 col_cupom_1, col_cupom_2 = st.columns([2, 1])
                 with col_cupom_1:
-                    cupom_input = st.text_input("Inserir Cupom de Desconto:", placeholder="Ex: CLIENTE10, PHARMA15, PRIMEIRACOMPRA").strip().upper()
+                    cupom_input = st.text_input("Inserir Cupom de Desconto:", placeholder="Ex: CLIENTE10").strip().upper()
                 with col_cupom_2:
                     st.write(" ")
                     st.write(" ")
@@ -382,260 +512,91 @@ if st.session_state.usuario_perfil == "Cliente":
                         if cupom_input in CUPONS_VALIDOS:
                             st.session_state.cupom_aplicado = cupom_input
                             st.session_state.percentual_desconto = CUPONS_VALIDOS[cupom_input]
-                            st.success(f"Cupom '{cupom_input}' applied com sucesso ({CUPONS_VALIDOS[cupom_input]*100:.0f}% OFF)!")
+                            st.success(f"Cupom '{cupom_input}' aplicado!")
                             st.rerun()
-                        else:
-                            st.error("Cupom inválido ou expirado.")
-                
-                if st.session_state.cupom_aplicado:
-                    st.success(f"🎟️ Cupom Ativo: **{st.session_state.cupom_aplicado}** (-{st.session_state.percentual_desconto*100:.0f}%)")
-
-            # Recomendação de produtos
-            recom_lista = obter_recomendacoes_atc(st.session_state.carrinho_vendas)
-            if recom_lista:
-                st.write("#### 💡 Aproveite Também:")
-                cols_recom = st.columns(len(recom_lista))
-                for idx, r_prod in enumerate(recom_lista):
-                    with cols_recom[idx]:
-                        with st.container(border=True):
-                            st.write(f"**{r_prod[1]}**")
-                            p_recom = r_prod[3] * 0.9 if st.session_state.usuario_logado else r_prod[3]
-                            st.write(f"R$ {p_recom:.2f}")
-                            bt_recom = st.button("Adicionar", key=f"rec_add_{r_prod[0]}", use_container_width=True)
-                            if bt_recom:
-                                inserir_produto_carrinho(r_prod[0], r_prod[1], p_recom, r_prod[5])
-                                st.rerun()
             
-            # Formas de Pagamento e Resumo Final
+            # Resumo e Finalização
             col_compra_1, col_compra_2 = st.columns(2)
             with col_compra_1:
                 st.markdown("### Resumo Financeiro")
-                st.write(f"Subtotal dos Medicamentos: R$ {subtotal:.2f}")
+                st.write(f"Subtotal: R$ {subtotal:.2f}")
                 if desconto > 0:
-                    st.write(f"Desconto Aplicado: -R$ {desconto:.2f}")
-                st.write(f"Impostos e Contribuições: R$ {impostos:.2f}")
-                st.write(f"Logística e Frete: R$ {frete:.2f}")
+                    st.write(f"Desconto: -R$ {desconto:.2f}")
+                st.write(f"Impostos (8%): R$ {impostos:.2f}")
+                st.write(f"Frete: R$ {frete:.2f}")
                 st.markdown(f"## **Total Final: R$ {total:.2f}**")
                 
-                st.markdown("---")
-                st.markdown("### 💳 Opção de Pagamento")
-                forma_pagamento = st.radio(
-                    "Selecione a forma de pagamento:",
-                    ["PIX (Aprovação Instantânea)", "Cartão de Crédito", "Cartão de Débito", "Boleto Bancário"]
-                )
+                forma_pagamento = st.radio("Forma de pagamento:", ["PIX", "Cartão de Crédito", "Cartão de Débito", "Boleto Bancário"])
                 
             with col_compra_2:
                 st.write("### Requisitos Documentais")
                 requer_receita_controle = any(item["requer_receita"] == 1 for item in st.session_state.carrinho_vendas)
                 
-                if requer_receita_controle:
-                    st.warning("⚠️ Seu carrinho possui medicamentos controlados. O checkout está bloqueado até o envio e validação de receita.")
-                    if st.session_state.receita_digital_validada:
-                        st.success("✅ Prescrição eletrônica anexada e validada pelo farmacêutico virtual.")
-                        permitir_finalizar = True
-                    else:
-                        st.error("❌ Documento de receita médica obrigatório pendente.")
-                        permitir_finalizar = False
-                else:
-                    st.success("✅ Itens isentos de receita. Pronto para finalização imediata.")
-                    permitir_finalizar = True
-                    
-                botao_finalizar = st.button("Concluir Compra e Emitir Nota", disabled=not permitir_finalizar, use_container_width=True, type="primary")
+                permitir_finalizar = not requer_receita_controle or st.session_state.receita_digital_validada
+                if requer_receita_controle and not st.session_state.receita_digital_validada:
+                    st.error("❌ Documento de receita médica obrigatório pendente.")
+                elif requer_receita_controle and st.session_state.receita_digital_validada:
+                    st.success("✅ Prescrição validada.")
                 
-                if botao_finalizar:
-                    try:
-                        cursor = conn.cursor()
-                        crm = st.session_state.dados_ocr_receita["crm_medico"] if st.session_state.dados_ocr_receita else "N/A"
-                        paciente = st.session_state.dados_ocr_receita["paciente_nome"] if st.session_state.dados_ocr_receita else (st.session_state.usuario_nome if st.session_state.usuario_nome else "Cliente Balcão")
-                        receita_json = str(st.session_state.dados_ocr_receita) if st.session_state.dados_ocr_receita else "N/A"
-                        
-                        cursor.execute("""
-                            INSERT INTO vendas_registro (data_hora, subtotal, desconto, imposto, total, forma_pagamento, crm_medico, paciente_nome, receita_retida_json)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (datetime.now().strftime("%d/%m/%Y %H:%M:%S"), subtotal, desconto, impostos, total, forma_pagamento, crm, paciente, receita_json))
-                        
-                        for item in st.session_state.carrinho_vendas:
-                            cursor.execute("""
-                                UPDATE estoque 
-                                SET quantidade = quantidade - ? 
-                                WHERE id = ?
-                            """, (item["quantidade"], item["id"]))
-                        conn.commit()
-                        
-                        st.success(f"🎉 Compra realizada com sucesso! ID do Pedido: #{cursor.lastrowid} | Pagamento: {forma_pagamento}")
-                        limpar_sessao_compra()
-                        time.sleep(2)
-                        st.rerun()
-                    except Exception as e:
-                        conn.rollback()
-                        st.error(f"Erro ao processar a venda: {e}")
-                        
-            if st.button("Limpar Carrinho", use_container_width=True):
-                limpar_sessao_compra()
-                st.rerun()
+                if st.button("Concluir Compra e Emitir Nota", disabled=not permitir_finalizar, use_container_width=True, type="primary"):
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO vendas_registro (data_hora, subtotal, desconto, imposto, total, forma_pagamento)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (datetime.now().strftime("%d/%m/%Y %H:%M:%S"), subtotal, desconto, impostos, total, forma_pagamento))
+                    conn.commit()
+                    st.success("🎉 Compra realizada com sucesso!")
+                    limpar_sessao_compra()
+                    time.sleep(1.5)
+                    st.rerun()
 
-    # TAB 3: CARREGAMENTO E PROCESSAMENTO DE RECEITAS MÉDICAS
+    # --- ABA 6: VALIDADOR DE RECEITAS ---
     with tab_receitas:
         st.subheader("Análise Documental Inteligente (Módulo IA/OCR)")
-        st.markdown("Submeta o arquivo de sua receita contendo a prescrição de medicamentos controlados (Diazepam, Zolpidem, Clonazepam).")
-        
-        arquivo_upload = st.file_uploader("Upload da Receita Médica (Formatos PNG, JPG, PDF):", type=["png", "jpg", "jpeg", "pdf"])
+        arquivo_upload = st.file_uploader("Upload da Receita Médica (PNG, JPG, PDF):", type=["png", "jpg", "jpeg", "pdf"])
         
         if arquivo_upload is not None:
-            st.image(arquivo_upload, caption="Imagem da receita para auditoria", width=400)
-            
-            with st.spinner("Analisando metadados médicos e executando extração textual de controle..."):
-                time.sleep(2.0)
-                
-                simulacao_dados_ocr = {
-                    "paciente_name": st.session_state.usuario_nome if st.session_state.usuario_nome else "Juliana de Oliveira",
-                    "medico_name": "Dr. Arthur Ramos Siqueira",
-                    "crm_medico": "CRM-SP 987654",
-                    "medicamentos_receitados": [
-                        {"nome": "Zolpidem 10mg", "dosagem": "1 comprimido por noite"},
-                        {"nome": "Diazepam 10mg", "dosagem": "1 comprimido a cada 12 horas"}
-                    ],
-                    "validade_diagnostico": "Dentro da Validade Legal"
-                }
-                
-                st.session_state.dados_ocr_receita = {
-                    "crm_medico": simulacao_dados_ocr["crm_medico"],
-                    "paciente_nome": simulacao_dados_ocr["paciente_name"]
-                }
+            st.image(arquivo_upload, caption="Receita anexada", width=350)
+            with st.spinner("Analisando metadados médicos..."):
+                time.sleep(1.5)
                 st.session_state.receita_digital_validada = True
-                
-            st.success("🎯 Análise Documental Concluída com Sucesso!")
-            
-            col_ocr_1, col_ocr_2 = st.columns(2)
-            with col_ocr_1:
-                st.markdown("### 🔍 Dados Extraídos pelo Módulo de Inteligência")
-                st.write(f"**Paciente:** {simulacao_dados_ocr['paciente_name']}")
-                st.write(f"**Profissional Prescritor:** {simulacao_dados_ocr['medico_name']}")
-                st.write(f"**Inscrição CRM:** {simulacao_dados_ocr['crm_medico']}")
-                st.write(f"**Validade do Receituário:** {simulacao_dados_ocr['validade_diagnostico']}")
-            with col_ocr_2:
-                st.markdown("### 💊 Substâncias Prescritas Detectadas")
-                st.table(pd.DataFrame(simulacao_dados_ocr["medicamentos_receitados"]))
+                st.success("🎯 Receita Validada com Sucesso!")
 
-# Interface Administrativa e Controle de Inventário
+# Interface Administrativa
 else:
     st.title("🛡️ Painel Administrativo de Controle de Insumos")
-    st.markdown("Interface exclusiva para monitoramento logístico, alteração de lotes comerciais e auditoria sanitária de dispensação.")
     
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM estoque WHERE quantidade <= 10")
-    insumos_criticos = cursor.fetchone()[0]
+    tab_gestao, tab_json = st.tabs(["📦 Gestão de Estoque", "⚙️ Identidade & JSONs do Sistema"])
     
-    cursor.execute("SELECT SUM(total) FROM vendas_registro")
-    faturamento_bruto = cursor.fetchone()[0]
-    faturamento_bruto = faturamento_bruto if faturamento_bruto else 0.0
-    
-    cursor.execute("SELECT COUNT(*) FROM vendas_registro")
-    vendas_count = cursor.fetchone()[0]
-    
-    col_kpi_1, col_kpi_2, col_kpi_3 = st.columns(3)
-    with col_kpi_1:
-        st.metric("Insumos em Nível Crítico (Estoque <= 10 u)", insumos_criticos, delta="- Reabastecimento urgente" if insumos_criticos > 0 else "Estoque seguro")
-    with col_kpi_2:
-        st.metric("Receita de Vendas Consolidada", f"R$ {faturamento_bruto:.2f}", delta=f"{vendas_count} transações concluídas")
-    with col_kpi_3:
-        st.metric("Infraestrutura de Banco", "Ativa", delta="Sincronização NeonDB (PostgreSQL)")
-        
-    tab_inventario_gestao, tab_vendas_auditoria = st.tabs(["📦 Controle do Estoque Ativo", "📈 Auditoria de Vendas e CRM"])
-    
-    with tab_inventario_gestao:
-        st.subheader("Gerenciador Interativo de Produtos")
-        st.markdown("Utilize o painel abaixo para reabastecer unidades ou alterar os preços praticados.")
-        
-        @st.fragment
-        def gerenciar_inventario_fragmento():
-            cursor_frag = conn.cursor()
-            cursor_frag.execute("SELECT * FROM estoque")
-            colunas = ["id", "nome", "codigo_atc", "preco", "quantidade", "requer_receita", "grupo_terapeutico", "tags"]
-            df_insumos = pd.DataFrame(cursor_frag.fetchall(), columns=colunas)
-            
-            df_modificado = st.data_editor(
-                df_insumos,
-                column_config={
-                    "id": "ID Insumo",
-                    "nome": "Descrição do Produto",
-                    "codigo_atc": "Código ATC",
-                    "preco": st.column_config.NumberColumn("Preço de Prateleira (R$)", min_value=0.1, format="%.2f"),
-                    "quantidade": st.column_config.NumberColumn("Estoque Físico (unidades)", min_value=0),
-                    "requer_receita": st.column_config.CheckboxColumn("Requer Receita Controlada?"),
-                    "grupo_terapeutico": "Ação Terapêutica",
-                    "tags": "Tags de Busca"
-                },
-                disabled=["id", "codigo_atc"],
-                use_container_width=True,
-                key="editor_estoque_farmacia"
-            )
-            
-            if st.button("Salvar Modificações de Estoque", type="primary"):
-                try:
-                    for idx, linha in df_modificado.iterrows():
-                        cursor_frag.execute("""
-                            UPDATE estoque
-                            SET nome = ?, preco = ?, quantidade = ?, requer_receita = ?, grupo_terapeutico = ?, tags = ?
-                            WHERE id = ?
-                        """, (linha["nome"], linha["preco"], linha["quantidade"], int(linha["requer_receita"]), linha["grupo_terapeutico"], linha["tags"], linha["id"]))
-                    conn.commit()
-                    st.success("As alterações físicas de estoque foram aplicadas com sucesso no banco relacional!")
-                    st.rerun()
-                except Exception as ex:
-                    conn.rollback()
-                    st.error(f"Falha de gravação de dados: {ex}")
-                    
-            st.markdown("---")
-            st.subheader("Alerta Visual de Nível de Insumos")
-            df_criticos = df_insumos[df_insumos["quantidade"] <= 15]
-            if not df_criticos.empty:
-                st.write("Medicamentos com volume de prateleira abaixo do limite de segurança:")
-                st.bar_chart(df_criticos, x="nome", y="quantidade", color="#FF4B4B")
-            else:
-                st.success("Todos os medicamentos operam com quantitativos seguros de prateleira.")
-                
-            st.markdown("---")
-            st.subheader("Cadastrar Novo Medicamento ou Princípio Ativo")
-            with st.form("form_novo_registro", clear_on_submit=True):
-                col_reg_1, col_reg_2 = st.columns(2)
-                with col_reg_1:
-                    reg_nome = st.text_input("Nome Comercial / Marca:", placeholder="Ex: AAS 100mg")
-                    reg_atc = st.text_input("Identificação Internacional ATC:", placeholder="Ex: N02BA01")
-                    reg_grupo = st.selectbox("Grupo Farmacológico Principal:", ["Analgésico", "Anti-inflamatório", "Ansiolítico", "Hipnótico", "Anti-histamínico", "Doenças Respiratórias", "Antibióticos"])
-                with col_reg_2:
-                    reg_preco = st.number_input("Preço de Prateleira (R$):", min_value=0.1, value=15.0, step=0.5)
-                    reg_qtd = st.number_input("Estoque Inicial (Unidades):", min_value=1, value=50)
-                    reg_requer = st.checkbox("Exige Retenção de Receita Controlada?")
-                    reg_tags = st.text_input("Palavras-chave / Tags de Sintomas:", placeholder="Ex: dor, febre, inflamacao")
-                    
-                btn_cadastrar = st.form_submit_button("Cadastrar Insumo no Banco", type="primary", use_container_width=True)
-                
-                if btn_cadastrar:
-                    if reg_nome and reg_atc:
-                        try:
-                            cursor_frag.execute("""
-                                INSERT INTO estoque (nome, codigo_atc, preco, quantidade, requer_receita, grupo_terapeutico, tags)
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
-                            """, (reg_nome, reg_atc, reg_preco, reg_qtd, 1 if reg_requer else 0, reg_grupo, reg_tags))
-                            conn.commit()
-                            st.success(f"Medicamento '{reg_nome}' cadastrado com sucesso!")
-                            st.rerun()
-                        except Exception as e_reg:
-                            conn.rollback()
-                            st.error(f"Erro ao inserir medicamento: {e_reg}")
-                    else:
-                        st.warning("Preencha ao menos o Nome e o Código ATC.")
-        
-        gerenciar_inventario_fragmento()
-        
-    with tab_vendas_auditoria:
-        st.subheader("Auditoria de Transações e Receituários")
-        cursor.execute("SELECT * FROM vendas_registro ORDER BY id_venda DESC")
-        vendas_db = cursor.fetchall()
-        
-        if vendas_db:
-            df_vendas = pd.DataFrame(vendas_db, columns=["ID Venda", "Data/Hora", "Subtotal", "Desconto", "Imposto", "Total", "Forma Pagamento", "CRM Médico", "Paciente", "JSON Receita"])
-            st.dataframe(df_vendas, use_container_width=True)
-        else:
-            st.info("Nenhuma venda realizada até o momento.")
+    with tab_gestao:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM estoque")
+        df_insumos = pd.DataFrame(cursor.fetchall(), columns=["id", "nome", "codigo_atc", "preco", "quantidade", "requer_receita", "grupo_terapeutico", "tags", "em_oferta", "distancia_km", "loja_parceira"])
+        st.dataframe(df_insumos, use_container_width=True)
+
+    with tab_json:
+        st.subheader("⚙️ Configurações JSON de Identidade e Parceiros")
+        col_json_1, col_json_2 = st.columns(2)
+        with col_json_1:
+            st.markdown("### Identidade da Plataforma (JSON)")
+            st.json(CONFIGURACAO_IDENTIDADE_JSON)
+        with col_json_2:
+            st.markdown("### Dados das Redes de Farmácias (JSON)")
+            st.json(FARMACIAS_PARCEIRAS_DATA)
+
+# ==========================================
+# 6. RODAPÉ INFERIOR REGULATÓRIO (ANVISA)
+# ==========================================
+st.markdown("---")
+col_foot_1, col_foot_2 = st.columns([1, 5])
+
+with col_foot_1:
+    # Imagem/Badge representativo do órgão fiscalizador ANVISA
+    st.image("https://www.gov.br/anvisa/pt-br/assuntos/noticias-anvisa/2021/anvisa-reforca-orientacoes-sobre-uso-de-mascaras/logo-anvisa.png/@@images/image", width=120)
+
+with col_foot_2:
+    st.markdown("""
+    <div class="footer-anvisa">
+        o nosso projeto segue as determinações da anvisa (agência nacional de vigilância sanitária) e as normas de boa prática de dispensação farmacêutica vigente.
+    </div>
+    """, unsafe_allow_html=True)
