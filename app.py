@@ -62,25 +62,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. CONEXÃO E INICIALIZAÇÃO DO BANCO DE DADOS (COM AUTO-RECUPERAÇÃO)
+# 2. CONEXÃO E INICIALIZAÇÃO DO BANCO DE DADOS
 # ==========================================
+@st.cache_resource
 def iniciar_banco_dados():
-    db_file = "farmacia_app.db"
-    try:
-        return _montar_estrutura_banco(db_file)
-    except sqlite3.OperationalError:
-        if os.path.exists(db_file):
-            try:
-                os.remove(db_file)
-            except Exception:
-                pass
-        return _montar_estrutura_banco(db_file)
-
-def _montar_estrutura_banco(db_file):
-    conexao = sqlite3.connect(db_file, check_same_thread=False)
+    conexao = sqlite3.connect("farmacia_app.db", check_same_thread=False)
     cursor = conexao.cursor()
     
-    # Criar tabela de estoque
+    # Criar tabela de estoque se inexistente
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS estoque (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,21 +86,18 @@ def _montar_estrutura_banco(db_file):
         )
     """)
     
-    # Migrações defensivas de colunas
+    # Migrações defensivas para colunas ausentes
     cursor.execute("PRAGMA table_info(estoque)")
     colunas_existentes = [coluna[1] for coluna in cursor.fetchall()]
     
-    colunas_novas = {
-        'em_oferta': "INTEGER DEFAULT 0",
-        'distancia_km': "REAL DEFAULT 0.0",
-        'loja_parceira': "TEXT DEFAULT 'Farmácia Central'"
-    }
-    
-    for col, tipo in colunas_novas.items():
-        if col not in colunas_existentes:
-            cursor.execute(f"ALTER TABLE estoque ADD COLUMN {col} {tipo}")
+    if 'em_oferta' not in colunas_existentes:
+        cursor.execute("ALTER TABLE estoque ADD COLUMN em_oferta INTEGER DEFAULT 0")
+    if 'distancia_km' not in colunas_existentes:
+        cursor.execute("ALTER TABLE estoque ADD COLUMN distancia_km REAL DEFAULT 0.0")
+    if 'loja_parceira' not in colunas_existentes:
+        cursor.execute("ALTER TABLE estoque ADD COLUMN loja_parceira TEXT DEFAULT 'Farmácia Central'")
         
-    # Criar tabela de vendas
+    # Criar tabela de auditoria de vendas
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS vendas_registro (
             id_venda INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,7 +114,7 @@ def _montar_estrutura_banco(db_file):
     """)
     conexao.commit()
     
-    # Carga inicial se o banco for novo
+    # Alimentação inicial do estoque
     cursor.execute("SELECT COUNT(*) FROM estoque")
     if cursor.fetchone()[0] == 0:
         medicamentos_carga = [
@@ -173,12 +159,14 @@ if "dados_ocr_receita" not in st.session_state:
 if "farmacias_favoritas" not in st.session_state:
     st.session_state.farmacias_favoritas = set()
 
+# Base de Cupons Válidos
 CUPONS_VALIDOS = {
     "CLIENTE10": 0.10,
     "PHARMA15": 0.15,
     "PRIMEIRACOMPRA": 0.20
 }
 
+# Dados em formato JSON de Identidade Institucional & Farmácias Parceiras
 CONFIGURACAO_IDENTIDADE_JSON = json.dumps({
     "nome_plataforma": "PharmaStream Pro",
     "versao": "2.4.0",
@@ -199,6 +187,7 @@ FARMACIAS_PARCEIRAS_DATA = [
     {"id": 4, "nome": "Drogaria Pacheco - Paulista", "lat": -23.5614, "lon": -46.6558, "distancia_km": 4.0, "tem_ofertas": False, "avaliacao": 4.5}
 ]
 
+# Estutura Completa de Categorias Solicitadas
 ESTRUTURA_CATEGORIAS = {
     "Saúde": ["Teste Rápido", "Saúde Bucal", "Produtos de Beleza", "Dispositivos Médicos", "Fraldas"],
     "Medicamentos": ["Medicamentos Controlados", "Hormônios", "Antimicrobianos", "Fitoterápicos", "Medicamentos Isentos de Prescrição"],
@@ -286,6 +275,16 @@ def limpar_sessao_compra():
     st.session_state.cupom_aplicado = None
     st.session_state.percentual_desconto = 0.0
 
+def obter_recomendacoes_atc(carrinho_atual):
+    if not carrinho_atual:
+        return []
+    cursor = conn.cursor()
+    nomes_carrinho = [item["nome"] for item in carrinho_atual]
+    cursor.execute("SELECT * FROM estoque WHERE quantidade > 5 LIMIT 4")
+    todos = cursor.fetchall()
+    recomendados = [prod for prod in todos if prod[1] not in nomes_carrinho]
+    return recomendados[:3]
+
 # ==========================================
 # 5. RENDERIZAÇÃO DAS VISÕES E ABAS
 # ==========================================
@@ -329,7 +328,7 @@ if st.session_state.usuario_perfil == "Cliente":
         "📄 Validação de Prescrições"
     ])
 
-    # --- ABA 1: OFERTAS EM DESTAQUE ---
+    # --- ABA 1: OFERTAS EM DESTAQUE (Alinhamento por Nome e Distância) ---
     with tab_ofertas:
         st.subheader("🔥 Ofertas Especiais Ordenadas por Proximidade")
         
@@ -353,7 +352,7 @@ if st.session_state.usuario_perfil == "Cliente":
                 
                 with coluna_atual:
                     with st.container(border=True):
-                        st.markdown("<span class='oferta-badge'>OFERTA</span>", unsafe_allow_html=True)
+                        st.markdown(f"<span class='oferta-badge'>OFERTA</span>", unsafe_allow_html=True)
                         st.subheader(nome_o)
                         st.markdown(f"🏪 **Loja Parceira:** {loja_o}")
                         st.markdown(f"📍 **Distância:** `{dist_o:.1f} km de você`")
@@ -386,12 +385,13 @@ if st.session_state.usuario_perfil == "Cliente":
                     if st.button(f"Ver {sub_nome}", key=f"cat_btn_{cat_selecionada}_{idx_sub}", use_container_width=True):
                         st.toast(f"Filtrando produtos para: {sub_nome}")
 
-    # --- ABA 3: MAPA E BUSCA DE FARMÁCIAS ---
+    # --- ABA 3: MAPA E BUSCA DE FARMÁCIAS (Favoritos e Ofertas) ---
     with tab_mapa:
         st.subheader("📍 Farmácias Parceiras e Distância em Tempo Real")
         st.markdown("Selecione sua farmácia de preferência e veja quais estão concedendo descontos especiais no mapa.")
         
         col_map_1, col_map_2 = st.columns([2, 1])
+        
         df_mapa = pd.DataFrame(FARMACIAS_PARCEIRAS_DATA)
         
         with col_map_1:
@@ -418,7 +418,7 @@ if st.session_state.usuario_perfil == "Cliente":
                                 st.session_state.farmacias_favoritas.add(farm["id"])
                             st.rerun()
 
-    # --- ABA 4: CATÁLOGO GERAL ---
+    # --- ABA 4: CATÁLOGO GERAL DE MEDICAMENTOS ---
     with tab_catalogo:
         col_filtro_1, col_filtro_2 = st.columns([2, 1])
         with col_filtro_1:
@@ -466,7 +466,7 @@ if st.session_state.usuario_perfil == "Cliente":
                         else:
                             st.markdown(f"### R$ {preco_p:.2f}")
                         
-                        if st.button("Comprar 🛒", key=f"compra_{id_p}", use_container_width=True):
+                        if st.button(f"Comprar 🛒", key=f"compra_{id_p}", use_container_width=True):
                             preco_final_item = preco_p * 0.9 if st.session_state.usuario_logado else preco_p
                             inserir_produto_carrinho(id_p, nome_p, preco_final_item, requer_rec_p)
                             st.rerun()
@@ -556,12 +556,7 @@ if st.session_state.usuario_perfil == "Cliente":
         arquivo_upload = st.file_uploader("Upload da Receita Médica (PNG, JPG, PDF):", type=["png", "jpg", "jpeg", "pdf"])
         
         if arquivo_upload is not None:
-            # Exibe prévia apenas se for imagem para evitar erro com PDF
-            if arquivo_upload.type in ["image/png", "image/jpeg"]:
-                st.image(arquivo_upload, caption="Receita anexada", width=350)
-            else:
-                st.info(f"📄 Arquivo anexado: {arquivo_upload.name}")
-
+            st.image(arquivo_upload, caption="Receita anexada", width=350)
             with st.spinner("Analisando metadados médicos..."):
                 time.sleep(1.5)
                 st.session_state.receita_digital_validada = True
@@ -596,11 +591,12 @@ st.markdown("---")
 col_foot_1, col_foot_2 = st.columns([1, 5])
 
 with col_foot_1:
+    # Imagem/Badge representativo do órgão fiscalizador ANVISA
     st.image("https://www.gov.br/anvisa/pt-br/assuntos/noticias-anvisa/2021/anvisa-reforca-orientacoes-sobre-uso-de-mascaras/logo-anvisa.png/@@images/image", width=120)
 
 with col_foot_2:
     st.markdown("""
     <div class="footer-anvisa">
-        O nosso projeto segue as determinações da ANVISA (Agência Nacional de Vigilância Sanitária) e as normas de boa prática de dispensação farmacêutica vigente.
+        o nosso projeto segue as determinações da anvisa (agência nacional de vigilância sanitária) e as normas de boa prática de dispensação farmacêutica vigente.
     </div>
     """, unsafe_allow_html=True)
