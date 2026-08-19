@@ -600,31 +600,45 @@ else:
             st.info("Nenhuma venda registrada até o momento no banco de dados.")
 
     # ABA ADMIN 2: GESTÃO DO ESTOQUE
-    with tab_adm_estoque:
-        st.subheader("📦 Balanço de Insumos Farmacêuticos")
+with tab_adm_estoque:
+    st.subheader("📦 Balanço de Insumos Farmacêuticos")
+    
+    cursor = conn.cursor()
+    
+    # 1. Especificamos exatamente as colunas que queremos buscar
+    cursor.execute("""
+        SELECT id, nome, codigo_atc, preco, quantidade, requer_receita, 
+               grupo_terapeutico, tags, em_oferta, distancia_km, loja_parceira 
+        FROM estoque
+    """)
+    estoque_data = cursor.fetchall()
+    
+    if estoque_data:
+        # 2. As 11 colunas aqui batem exatamente com as 11 colunas do SELECT acima
+        cols_estoque = [
+            "ID", "Nome", "Código ATC", "Preço (R$)", "Qtd", 
+            "Requer Receita", "Grupo Terapêutico", "Tags", 
+            "Em Oferta", "Distância (km)", "Loja"
+        ]
         
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM estoque")
-        estoque_data = cursor.fetchall()
+        df_estoque = pd.DataFrame(estoque_data, columns=cols_estoque)
         
-        if estoque_data:
-            cols_estoque = ["ID", "Nome", "Código ATC", "Preço (R$)", "Qtd", "Requer Receita", "Grupo Terapêutico", "Tags", "Em Oferta", "Distância (km)", "Loja"]
-            df_estoque = pd.DataFrame(estoque_data, columns=cols_estoque)
+        # Filtro interativo na tabela do admin
+        termo_adm = st.text_input("🔍 Filtrar itens no banco de dados do estoque:", placeholder="Digite o nome ou classe...")
+        if termo_adm:
+            df_estoque = df_estoque[
+                df_estoque['Nome'].str.contains(termo_adm, case=False, na=False) | 
+                df_estoque['Grupo Terapêutico'].str.contains(termo_adm, case=False, na=False)
+            ]
             
-            # Filtro interativo na tabela do admin
-            termo_adm = st.text_input("🔍 Filtrar itens no banco de dados do estoque:", placeholder="Digite o nome ou classe...")
-            if termo_adm:
-                df_estoque = df_estoque[df_estoque['Nome'].str.contains(termo_adm, case=False) | df_estoque['Grupo Terapêutico'].str.contains(termo_adm, case=False)]
-                
-            st.dataframe(df_estoque, use_container_width=True)
-            
-            # Alertas sanitários do estoque
-            itens_criticos = df_estoque[df_estoque['Qtd'] < 10]
-            if not itens_criticos.empty:
-                st.warning(f"⚠️ **Atenção Farmacêutica:** Existem {len(itens_criticos)} produto(s) com nível crítico de estoque (menos de 10 unidades).")
-        else:
-            st.error("Não foram encontrados medicamentos cadastrados.")
-
+        st.dataframe(df_estoque, use_container_width=True)
+        
+        # Alertas sanitários do estoque
+        itens_criticos = df_estoque[df_estoque['Qtd'] < 10]
+        if not itens_criticos.empty:
+            st.warning(f"⚠️ **Atenção Farmacêutica:** Existem {len(itens_criticos)} produto(s) com nível crítico de estoque (menos de 10 unidades).")
+    else:
+        st.error("Não foram encontrados medicamentos cadastrados.")
     # ABA ADMIN 3: VISUALIZADOR DE ARQUIVOS JSON E PERFIL
     with tab_adm_json:
         st.subheader("⚙️ Estrutura de Dados do Perfil Operacional e Parceiros")
