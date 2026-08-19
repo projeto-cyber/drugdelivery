@@ -123,14 +123,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. BANCO DE DADOS E ESTRUTURA EXPANDIDA (COM MIGRAÇÃO AUTO)
+# 2. BANCO DE DADOS E ESTRUTURA EXPANDIDA
 # ==========================================
-@st.cache_resource
+# ⚠️ REMOVIDO @st.cache_resource PARA EVITAR ERROS DE CONEXÃO NO STREAMLIT
 def iniciar_banco_dados():
     conexao = sqlite3.connect("farmacia_app.db", check_same_thread=False)
     cursor = conexao.cursor()
     
-    # 1. Cria a tabela caso ela não exista
+    # 1. Cria a tabela caso não exista
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS estoque (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,7 +154,7 @@ def iniciar_banco_dados():
         )
     """)
     
-    # 2. MIGRAÇÃO DEFENSIVA: Verifica e adiciona colunas novas caso a tabela seja do modelo antigo
+    # 2. Migração Defensiva de Colunas (para bases antigas no Streamlit Cloud)
     cursor.execute("PRAGMA table_info(estoque)")
     colunas_existentes = [coluna[1] for coluna in cursor.fetchall()]
     
@@ -178,7 +178,6 @@ def iniciar_banco_dados():
         if coluna not in colunas_existentes:
             cursor.execute(f"ALTER TABLE estoque ADD COLUMN {coluna} {tipo}")
             
-    # Criação da tabela de vendas
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS vendas_registro (
             id_venda INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -194,11 +193,11 @@ def iniciar_banco_dados():
     """)
     conexao.commit()
     
-    # 3. Se a base estiver vazia ou foi migrada sem dados novos, insere a carga padrão
+    # 3. Popula os dados de exemplo apenas se a tabela estiver sem produtos completos
     cursor.execute("SELECT COUNT(*) FROM estoque WHERE principio_ativo != ''")
     if cursor.fetchone()[0] == 0:
-        # Limpa registros antigos incompletos para garantir integridade visual
         cursor.execute("DELETE FROM estoque")
+        conexao.commit()  # Commit imediato após limpar para liberar o lock
         
         medicamentos_carga = [
             ("Ibuprofeno", "Ibuprofeno", "EMS", "600mg", "Comprimidos Revestidos", "Caixa com 20 comprimidos", "MIP", "M01AE", 24.90, 16.90, 45, 0, "Anti-inflamatório", 1, 0.8, "Drogaria São Paulo - Centro", "https://img.freepik.com/vetores-gratis/ilustracao-de-design-plano-de-caixa-de-remedio_23-2149363062.jpg"),
