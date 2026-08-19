@@ -64,12 +64,23 @@ st.markdown("""
 # ==========================================
 # 2. CONEXÃO E INICIALIZAÇÃO DO BANCO DE DADOS
 # ==========================================
-@st.cache_resource
 def iniciar_banco_dados():
-    conexao = sqlite3.connect("farmacia_app.db", check_same_thread=False)
+    db_file = "farmacia_app.db"
+    try:
+        return _montar_estrutura_banco(db_file)
+    except sqlite3.OperationalError:
+        if os.path.exists(db_file):
+            try:
+                os.remove(db_file)
+            except Exception:
+                pass
+        return _montar_estrutura_banco(db_file)
+
+def _montar_estrutura_banco(db_file):
+    conexao = sqlite3.connect(db_file, check_same_thread=False)
     cursor = conexao.cursor()
     
-    # Criar tabela de estoque se inexistente
+    # Criar tabela de estoque
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS estoque (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,18 +97,21 @@ def iniciar_banco_dados():
         )
     """)
     
-    # Migrações defensivas para colunas ausentes
+    # Migrações defensivas
     cursor.execute("PRAGMA table_info(estoque)")
     colunas_existentes = [coluna[1] for coluna in cursor.fetchall()]
     
-    if 'em_oferta' not in colunas_existentes:
-        cursor.execute("ALTER TABLE estoque ADD COLUMN em_oferta INTEGER DEFAULT 0")
-    if 'distancia_km' not in colunas_existentes:
-        cursor.execute("ALTER TABLE estoque ADD COLUMN distancia_km REAL DEFAULT 0.0")
-    if 'loja_parceira' not in colunas_existentes:
-        cursor.execute("ALTER TABLE estoque ADD COLUMN loja_parceira TEXT DEFAULT 'Farmácia Central'")
+    colunas_novas = {
+        'em_oferta': "INTEGER DEFAULT 0",
+        'distancia_km': "REAL DEFAULT 0.0",
+        'loja_parceira': "TEXT DEFAULT 'Farmácia Central'"
+    }
+    
+    for col, tipo in colunas_novas.items():
+        if col not in colunas_existentes:
+            cursor.execute(f"ALTER TABLE estoque ADD COLUMN {col} {tipo}")
         
-    # Criar tabela de auditoria de vendas
+    # Criar tabela de vendas
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS vendas_registro (
             id_venda INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,7 +128,7 @@ def iniciar_banco_dados():
     """)
     conexao.commit()
     
-    # Alimentação inicial do estoque
+    # Carga inicial se o banco for novo
     cursor.execute("SELECT COUNT(*) FROM estoque")
     if cursor.fetchone()[0] == 0:
         medicamentos_carga = [
@@ -159,26 +173,30 @@ if "dados_ocr_receita" not in st.session_state:
 if "farmacias_favoritas" not in st.session_state:
     st.session_state.farmacias_favoritas = set()
 
-# Base de Cupons Válidos
 CUPONS_VALIDOS = {
     "CLIENTE10": 0.10,
     "PHARMA15": 0.15,
     "PRIMEIRACOMPRA": 0.20
 }
 
-# Dados em formato JSON de Identidade Institucional & Farmácias Parceiras
-CONFIGURACAO_IDENTIDADE_JSON = json.dumps({
+# Dicionário do Perfil Operacional e Regulação
+CONFIGURACAO_IDENTIDADE_DICT = {
     "nome_plataforma": "PharmaStream Pro",
     "versao": "2.4.0",
     "regulacao": "ANVISA",
     "ambiente": "Produção",
     "suporte_emergencial": "0800-777-PHARMA",
+    "parametros_operacionais": {
+        "retencao_receitas_notificacao_a": True,
+        "validade_balanco_damb": "Trimestral",
+        "integração_sngpc": "Ativa"
+    },
     "temas": {
         "cor_primaria": "#09AB3B",
         "cor_secundaria": "#2196F3",
         "alerta": "#FF4B4B"
     }
-}, indent=4, ensure_ascii=False)
+}
 
 FARMACIAS_PARCEIRAS_DATA = [
     {"id": 1, "nome": "Drogaria São Paulo - Centro", "lat": -23.5505, "lon": -46.6333, "distancia_km": 0.8, "tem_ofertas": True, "avaliacao": 4.8},
@@ -187,7 +205,6 @@ FARMACIAS_PARCEIRAS_DATA = [
     {"id": 4, "nome": "Drogaria Pacheco - Paulista", "lat": -23.5614, "lon": -46.6558, "distancia_km": 4.0, "tem_ofertas": False, "avaliacao": 4.5}
 ]
 
-# Estutura Completa de Categorias Solicitadas
 ESTRUTURA_CATEGORIAS = {
     "Saúde": ["Teste Rápido", "Saúde Bucal", "Produtos de Beleza", "Dispositivos Médicos", "Fraldas"],
     "Medicamentos": ["Medicamentos Controlados", "Hormônios", "Antimicrobianos", "Fitoterápicos", "Medicamentos Isentos de Prescrição"],
@@ -213,7 +230,7 @@ def gerenciar_autenticacao():
 
     st.sidebar.markdown("---")
     if not st.session_state.usuario_logado:
-        st.sidebar.subheader("🔑 Login do Cliente")
+        st.sidebar.subheader("🔑 Login do Usuário")
         with st.sidebar.form("form_login_sidebar"):
             user_input = st.text_input("Usuário / E-mail")
             pass_input = st.text_input("Senha", type="password")
@@ -275,25 +292,15 @@ def limpar_sessao_compra():
     st.session_state.cupom_aplicado = None
     st.session_state.percentual_desconto = 0.0
 
-def obter_recomendacoes_atc(carrinho_atual):
-    if not carrinho_atual:
-        return []
-    cursor = conn.cursor()
-    nomes_carrinho = [item["nome"] for item in carrinho_atual]
-    cursor.execute("SELECT * FROM estoque WHERE quantidade > 5 LIMIT 4")
-    todos = cursor.fetchall()
-    recomendados = [prod for prod in todos if prod[1] not in nomes_carrinho]
-    return recomendados[:3]
-
 # ==========================================
 # 5. RENDERIZAÇÃO DAS VISÕES E ABAS
 # ==========================================
 gerenciar_autenticacao()
 
+# --- PERFIL CLIENTE ---
 if st.session_state.usuario_perfil == "Cliente":
     st.title("🛒 PharmaStream - E-Commerce de Saúde")
     
-    # Cabeçalho Superior
     col_head_1, col_head_2 = st.columns([3, 1])
     with col_head_1:
         st.markdown("Encontre seus medicamentos, produtos de saúde e receba em casa com entrega orientada pela farmácia mais próxima.")
@@ -314,11 +321,9 @@ if st.session_state.usuario_perfil == "Cliente":
                 st.write(f"📦 **Frete estimado:** R$ {frete_temp:.2f}")
                 st.markdown(f"#### **Total: R$ {total_temp:.2f}**")
 
-    # Banner de Boas-Vindas
     if st.session_state.usuario_logado:
         st.info(f"🎉 **Ofertas Exclusivas para {st.session_state.usuario_nome}!** Use o cupom **CLIENTE10** para 10% OFF ou **PHARMA15** para 15% OFF!")
 
-    # Estruturação das Abas Principais
     tab_ofertas, tab_categorias, tab_mapa, tab_catalogo, tab_carrinho, tab_receitas = st.tabs([
         "🔥 Ofertas em Destaque",
         "📂 Todas as Categorias",
@@ -328,10 +333,9 @@ if st.session_state.usuario_perfil == "Cliente":
         "📄 Validação de Prescrições"
     ])
 
-    # --- ABA 1: OFERTAS EM DESTAQUE (Alinhamento por Nome e Distância) ---
+    # ABA 1: OFERTAS
     with tab_ofertas:
         st.subheader("🔥 Ofertas Especiais Ordenadas por Proximidade")
-        
         try:
             cursor = conn.cursor()
             cursor.execute("""
@@ -352,13 +356,13 @@ if st.session_state.usuario_perfil == "Cliente":
                 
                 with coluna_atual:
                     with st.container(border=True):
-                        st.markdown(f"<span class='oferta-badge'>OFERTA</span>", unsafe_allow_html=True)
+                        st.markdown("<span class='oferta-badge'>OFERTA</span>", unsafe_allow_html=True)
                         st.subheader(nome_o)
                         st.markdown(f"🏪 **Loja Parceira:** {loja_o}")
                         st.markdown(f"📍 **Distância:** `{dist_o:.1f} km de você`")
                         st.markdown(f"**Classe:** {grupo_o}")
                         
-                        preco_final = preco_o * 0.85 # 15% OFF nas ofertas
+                        preco_final = preco_o * 0.85
                         st.markdown(f"### R$ {preco_final:.2f} <span style='font-size:0.6em; color:gray; text-decoration:line-through;'>R$ {preco_o:.2f}</span>", unsafe_allow_html=True)
                         
                         if st.button("Adicionar Oferta 🛒", key=f"btn_oferta_{id_o}", use_container_width=True):
@@ -367,16 +371,14 @@ if st.session_state.usuario_perfil == "Cliente":
         else:
             st.info("Nenhuma oferta promocional disponível no momento.")
 
-    # --- ABA 2: TODAS AS CATEGORIAS ---
+    # ABA 2: CATEGORIAS
     with tab_categorias:
         st.subheader("📂 Navegue por Categorias de Produtos")
-        
         cat_selecionada = st.selectbox("Selecione uma Categoria Principal:", list(ESTRUTURA_CATEGORIAS.keys()))
         subcategorias = ESTRUTURA_CATEGORIAS[cat_selecionada]
         
         st.markdown(f"### Subcategorias de **{cat_selecionada}**")
         cols_sub = st.columns(len(subcategorias) if len(subcategorias) <= 4 else 4)
-        
         for idx_sub, sub_nome in enumerate(subcategorias):
             with cols_sub[idx_sub % 4]:
                 with st.container(border=True):
@@ -385,13 +387,10 @@ if st.session_state.usuario_perfil == "Cliente":
                     if st.button(f"Ver {sub_nome}", key=f"cat_btn_{cat_selecionada}_{idx_sub}", use_container_width=True):
                         st.toast(f"Filtrando produtos para: {sub_nome}")
 
-    # --- ABA 3: MAPA E BUSCA DE FARMÁCIAS (Favoritos e Ofertas) ---
+    # ABA 3: MAPA DE FARMÁCIAS
     with tab_mapa:
         st.subheader("📍 Farmácias Parceiras e Distância em Tempo Real")
-        st.markdown("Selecione sua farmácia de preferência e veja quais estão concedendo descontos especiais no mapa.")
-        
         col_map_1, col_map_2 = st.columns([2, 1])
-        
         df_mapa = pd.DataFrame(FARMACIAS_PARCEIRAS_DATA)
         
         with col_map_1:
@@ -418,7 +417,7 @@ if st.session_state.usuario_perfil == "Cliente":
                                 st.session_state.farmacias_favoritas.add(farm["id"])
                             st.rerun()
 
-    # --- ABA 4: CATÁLOGO GERAL DE MEDICAMENTOS ---
+    # ABA 4: CATÁLOGO GERAL
     with tab_catalogo:
         col_filtro_1, col_filtro_2 = st.columns([2, 1])
         with col_filtro_1:
@@ -466,17 +465,16 @@ if st.session_state.usuario_perfil == "Cliente":
                         else:
                             st.markdown(f"### R$ {preco_p:.2f}")
                         
-                        if st.button(f"Comprar 🛒", key=f"compra_{id_p}", use_container_width=True):
+                        if st.button("Comprar 🛒", key=f"compra_{id_p}", use_container_width=True):
                             preco_final_item = preco_p * 0.9 if st.session_state.usuario_logado else preco_p
                             inserir_produto_carrinho(id_p, nome_p, preco_final_item, requer_rec_p)
                             st.rerun()
         else:
             st.info("Nenhum medicamento localizado.")
 
-    # --- ABA 5: CARRINHO E CHECKOUT ---
+    # ABA 5: CARRINHO
     with tab_carrinho:
         st.subheader("Carrinho de Compras")
-        
         if not st.session_state.carrinho_vendas:
             st.info("O seu carrinho de compras está vazio no momento.")
         else:
@@ -499,7 +497,6 @@ if st.session_state.usuario_perfil == "Cliente":
                     st.write(f"**R$ {item['preco'] * item['quantidade']:.2f}**")
             st.markdown("---")
             
-            # Cupons
             st.markdown("### 🎟️ Cupons e Ofertas")
             if st.session_state.usuario_logado:
                 col_cupom_1, col_cupom_2 = st.columns([2, 1])
@@ -515,7 +512,6 @@ if st.session_state.usuario_perfil == "Cliente":
                             st.success(f"Cupom '{cupom_input}' aplicado!")
                             st.rerun()
             
-            # Resumo e Finalização
             col_compra_1, col_compra_2 = st.columns(2)
             with col_compra_1:
                 st.markdown("### Resumo Financeiro")
@@ -531,8 +527,8 @@ if st.session_state.usuario_perfil == "Cliente":
             with col_compra_2:
                 st.write("### Requisitos Documentais")
                 requer_receita_controle = any(item["requer_receita"] == 1 for item in st.session_state.carrinho_vendas)
-                
                 permitir_finalizar = not requer_receita_controle or st.session_state.receita_digital_validada
+                
                 if requer_receita_controle and not st.session_state.receita_digital_validada:
                     st.error("❌ Documento de receita médica obrigatório pendente.")
                 elif requer_receita_controle and st.session_state.receita_digital_validada:
@@ -550,234 +546,101 @@ if st.session_state.usuario_perfil == "Cliente":
                     time.sleep(1.5)
                     st.rerun()
 
-    # --- ABA 6: VALIDADOR DE RECEITAS ---
+    # ABA 6: VALIDAÇÃO DE RECEITAS
     with tab_receitas:
         st.subheader("Análise Documental Inteligente (Módulo IA/OCR)")
         arquivo_upload = st.file_uploader("Upload da Receita Médica (PNG, JPG, PDF):", type=["png", "jpg", "jpeg", "pdf"])
         
         if arquivo_upload is not None:
-            st.image(arquivo_upload, caption="Receita anexada", width=350)
+            if arquivo_upload.type in ["image/png", "image/jpeg"]:
+                st.image(arquivo_upload, caption="Receita anexada", width=350)
+            else:
+                st.info(f"📄 Arquivo anexado: {arquivo_upload.name}")
+
             with st.spinner("Analisando metadados médicos..."):
                 time.sleep(1.5)
                 st.session_state.receita_digital_validada = True
                 st.success("🎯 Receita Validada com Sucesso!")
 
-# ==========================================
-# INTERFACE ADMINISTRATIVA / PAINEL ERP (ENTERPRISE)
-# ==========================================
+# --- PERFIL ADMINISTRADOR / FARMACÊUTICO ---
 else:
-    st.title("🛡️ Painel Executivo & Controle Sanitário ERP")
-    st.caption("Módulo Avançado de Gestão de Insumos, Rastreabilidade e Conformidade Sanitária")
-
-    # ---------------------------------------------------------
-    # 1. CARREGAMENTO E TRATAMENTO SEGURO DOS DADOS
-    # ---------------------------------------------------------
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, nome, codigo_atc, preco, quantidade, requer_receita, 
-               grupo_terapeutico, tags, em_oferta, distancia_km, loja_parceira 
-        FROM estoque
-    """)
-    dados_estoque = cursor.fetchall()
-    cols_nomes = [desc[0] for desc in cursor.description]
-    df_insumos = pd.DataFrame(dados_estoque, columns=cols_nomes)
-
-    # Cálculo de métricas globais
-    total_skus = len(df_insumos)
-    valor_total_estoque = (df_insumos['preco'] * df_insumos['quantidade']).sum() if not df_insumos.empty else 0.0
-    itens_criticos = df_insumos[df_insumos['quantidade'] < 10] if not df_insumos.empty else pd.DataFrame()
-    itens_controlados = df_insumos[df_insumos['requer_receita'] == 1] if not df_insumos.empty else pd.DataFrame()
-
-    # ---------------------------------------------------------
-    # 2. DASHBOARD DE KPIS EXECUTIVOS
-    # ---------------------------------------------------------
-    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-    with col_kpi1:
-        st.metric("Total de SKUs Cadastrados", f"{total_skus} itens")
-    with col_kpi2:
-        st.metric("Valor Imobilizado (Estoque)", f"R$ {valor_total_estoque:,.2f}")
-    with col_kpi3:
-        st.metric("Itens em Ruptura / Alerta", f"{len(itens_criticos)} itens", delta_color="inverse")
-    with col_kpi4:
-        st.metric("Medicamentos Controlados", f"{len(itens_controlados)} itens")
-
-    st.markdown("---")
-
-    # ---------------------------------------------------------
-    # 3. ESTRUTURA DE NAVEGAÇÃO PRINCIPAL (ABAS DE NÍVEL EXECUTIVO)
-    # ---------------------------------------------------------
-    tab_gestao, tab_sanitario, tab_auditoria, tab_json = st.tabs([
-        "📦 Gestão Integrada de Estoque",
-        "⚖️ Rastreabilidade & Controle Sanitário",
-        "📋 Trilha de Auditoria (Logs)",
-        "⚙️ Identidade & JSONs do Sistema"
+    st.title("🛡️ Painel Administrativo e Controle Sanitário")
+    st.caption("Visão técnica farmacêutica, regulação e controle de vendas e estoque.")
+    
+    # Abas organizadas e aninhadas para o perfil Administrador/Farmacêutico
+    tab_adm_vendas, tab_adm_estoque, tab_adm_json = st.tabs([
+        "📊 Relatórios & Vendas", 
+        "📦 Gestão de Estoque", 
+        "⚙️ Configurações & Dados JSON"
     ])
-
-    # ---------------------------------------------------------
-    # ABA 1: GESTÃO INTEGRADA DE ESTOQUE
-    # ---------------------------------------------------------
-    with tab_gestao:
-        st.subheader("📊 Insumos e Disponibilidade Operacional")
-
-        # Expander para cadastro rápido de novos insumos
-        with st.expander("➕ Cadastrar Novo Insumo Farmacêutico no Banco", expanded=False):
-            with st.form("form_novo_insumo"):
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    novo_nome = st.text_input("Nome do Insumo / Medicamento*")
-                    novo_atc = st.text_input("Código ATC / Categoria*", placeholder="Ex: N02BE")
-                    novo_preco = st.number_input("Preço Unitário (R$)*", min_value=0.01, step=0.5)
-                with c2:
-                    nova_qtd = st.number_input("Quantidade Inicial em Estoque*", min_value=1, step=1)
-                    novo_grupo = st.selectbox("Classe / Grupo Terapêutico", [
-                        "Analgésico", "Anti-inflamatório", "Antimicrobiano", 
-                        "Ansiolítico", "Hipnótico", "Doenças Respiratórias", "Outros"
-                    ])
-                    nova_loja = st.selectbox("Loja / Filial de Destino", [
-                        "Drogaria São Paulo - Centro", "Droga Raia - Pinheiros", 
-                        "Farmácia Pague Menos - Jardins", "Drogaria Pacheco - Paulista"
-                    ])
-                with c3:
-                    novo_requer = st.checkbox("Exige Retenção de Receita (Portaria 344)?")
-                    novo_oferta = st.checkbox("Colocar em Oferta no E-commerce?")
-                    novas_tags = st.text_input("Tags para busca (separadas por vírgula)", placeholder="ex: febre, dor, controlado")
-
-                btn_cadastrar = st.form_submit_button("Salvar no Banco de Dados", type="primary", use_container_width=True)
-
-                if btn_cadastrar:
-                    if novo_nome and novo_atc:
-                        cursor.execute("""
-                            INSERT INTO estoque (nome, codigo_atc, preco, quantidade, requer_receita, grupo_terapeutico, tags, em_oferta, distancia_km, loja_parceira)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            novo_nome, novo_atc, novo_preco, nova_qtd, 
-                            1 if novo_requer else 0, novo_grupo, novas_tags, 
-                            1 if novo_oferta else 0, 1.0, nova_loja
-                        ))
-                        conn.commit()
-                        st.success(f"Insumo **{novo_nome}** cadastrado com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("Preencha os campos obrigatórios (*).")
-
-        # Filtro de Tabela
-        st.markdown("#### 🔍 Consulta de Tabela de Insumos")
-        f_col1, f_col2 = st.columns([3, 1])
-        with f_col1:
-            termo_busca = st.text_input("Filtrar estoque por nome, código ATC ou classe:", placeholder="Ex: Ibuprofeno ou M01AE")
-        with f_col2:
-            apenas_criticos = st.checkbox("Exibir apenas estoque crítico (< 10)")
-
-        df_exibicao = df_insumos.copy()
-        if termo_busca:
-            df_exibicao = df_exibicao[
-                df_exibicao['nome'].str.contains(termo_busca, case=False, na=False) |
-                df_exibicao['codigo_atc'].str.contains(termo_busca, case=False, na=False) |
-                df_exibicao['grupo_terapeutico'].str.contains(termo_busca, case=False, na=False)
-            ]
-        if apenas_criticos:
-            df_exibicao = df_exibicao[df_exibicao['quantidade'] < 10]
-
-        # Exibição do Grid
-        st.dataframe(
-            df_exibicao,
-            use_container_width=True,
-            column_config={
-                "id": "ID",
-                "nome": "Insumo / Medicamento",
-                "codigo_atc": "Cód. ATC",
-                "preco": st.column_config.NumberColumn("Preço Unit. (R$)", format="R$ %.2f"),
-                "quantidade": st.column_config.NumberColumn("Qtd. Estoque"),
-                "requer_receita": st.column_config.CheckboxColumn("Retém Receita?"),
-                "em_oferta": st.column_config.CheckboxColumn("Oferta Ativa?"),
-                "loja_parceira": "Unidade / Filial"
-            }
-        )
-
-        # Botão para Download de Relatórios Contábeis/Auditoria
-        csv_buffer = df_insumos.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Exportar Relatório do Estoque (CSV)",
-            data=csv_buffer,
-            file_name=f"relatorio_estoque_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv",
-            type="secondary"
-        )
-
-    # ---------------------------------------------------------
-    # ABA 2: RASTREABILIDADE & CONTROLE SANITÁRIO
-    # ---------------------------------------------------------
-    with tab_sanitario:
-        st.subheader("⚖️ Validação e Regulação Sanitária (SNGPC / ANVISA)")
-        st.markdown("Monitoramento focado no controle de substâncias sob regulação especial e vigilância de insumos.")
-
-        col_san1, col_san2 = st.columns(2)
-        with col_san1:
-            st.markdown("### 🚨 Risco de Ruptura (Menos de 10 unidades)")
-            if not itens_criticos.empty:
-                for _, row in itens_criticos.iterrows():
-                    st.markdown(f"""
-                    <div class='card-critico'>
-                        <strong>{row['nome']}</strong> (Qtd Atual: <code>{row['quantidade']}</code>)<br>
-                        <small>Filial: {row['loja_parceira']} | Classe: {row['grupo_terapeutico']}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.success("Nenhum insumo encontra-se em nível crítico de estoque.")
-
-        with col_san2:
-            st.markdown("### 📜 Portaria 344/98 & Controle Especial")
-            if not itens_controlados.empty:
-                st.dataframe(
-                    itens_controlados[['nome', 'codigo_atc', 'quantidade', 'loja_parceira']],
-                    use_container_width=True
-                )
-            else:
-                st.info("Nenhum medicamento sob controle especial localizado.")
-
-    # ---------------------------------------------------------
-    # ABA 3: TRILHA DE AUDITORIA (LOGS)
-    # ---------------------------------------------------------
-    with tab_auditoria:
-        st.subheader("📋 Trilha de Auditoria & Segurança de Transações")
-        st.markdown("Logs automáticos de alteração de sistema para conformidade com normas regulatórias.")
+    
+    # ABA ADMIN 1: VENDAS E MÉTRICAS
+    with tab_adm_vendas:
+        st.subheader("📈 Histórico de Transações e Vendas")
         
-        # Simulação de Trilha de Auditoria Enterprise
-        logs_sistema = [
-            {"Data/Hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Usuário": st.session_state.usuario_nome or "Admin", "Módulo": "Estoque", "Ação": "Consulta de inventário e emissão de relatório"},
-            {"Data/Hora": "2026-08-18 10:14:02", "Usuário": "Farmacêutico Responsável", "Módulo": "SNGPC", "Ação": "Validação de receita médica digital"},
-            {"Data/Hora": "2026-08-17 18:30:11", "Usuário": "Sistema Automation", "Módulo": "Sessão", "Ação": "Backup automático da base de dados sqlite3"}
-        ]
-        st.table(pd.DataFrame(logs_sistema))
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM vendas_registro ORDER BY id_venda DESC")
+        vendas_data = cursor.fetchall()
+        
+        if vendas_data:
+            cols_venda = ["ID", "Data/Hora", "Subtotal (R$)", "Desconto (R$)", "Imposto (R$)", "Total (R$)", "Forma Pagamento", "CRM", "Paciente", "Receita Retida"]
+            df_vendas = pd.DataFrame(vendas_data, columns=cols_venda)
+            
+            col_m1, col_m2, col_m3 = st.columns(3)
+            with col_m1:
+                st.metric("Total em Vendas", f"R$ {df_vendas['Total (R$)'].sum():.2f}")
+            with col_m2:
+                st.metric("Pedidos Realizados", f"{len(df_vendas)}")
+            with col_m3:
+                st.metric("Ticket Médio", f"R$ {df_vendas['Total (R$)'].mean():.2f}")
+                
+            st.markdown("---")
+            st.dataframe(df_vendas, use_container_width=True)
+        else:
+            st.info("Nenhuma venda registrada até o momento no banco de dados.")
 
-    # ---------------------------------------------------------
-    # ABA 4: CONFIGURAÇÕES JSON DO SISTEMA
-    # ---------------------------------------------------------
-    with tab_json:
-        st.subheader("⚙️ Configurações e Payloads do Sistema")
-        st.markdown("Estruturas de metadados em formato JSON nativo para integração de APIs externas.")
+    # ABA ADMIN 2: GESTÃO DO ESTOQUE
+    with tab_adm_estoque:
+        st.subheader("📦 Balanço de Insumos Farmacêuticos")
+        
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM estoque")
+        estoque_data = cursor.fetchall()
+        
+        if estoque_data:
+            cols_estoque = ["ID", "Nome", "Código ATC", "Preço (R$)", "Qtd", "Requer Receita", "Grupo Terapêutico", "Tags", "Em Oferta", "Distância (km)", "Loja"]
+            df_estoque = pd.DataFrame(estoque_data, columns=cols_estoque)
+            
+            # Filtro interativo na tabela do admin
+            termo_adm = st.text_input("🔍 Filtrar itens no banco de dados do estoque:", placeholder="Digite o nome ou classe...")
+            if termo_adm:
+                df_estoque = df_estoque[df_estoque['Nome'].str.contains(termo_adm, case=False) | df_estoque['Grupo Terapêutico'].str.contains(termo_adm, case=False)]
+                
+            st.dataframe(df_estoque, use_container_width=True)
+            
+            # Alertas sanitários do estoque
+            itens_criticos = df_estoque[df_estoque['Qtd'] < 10]
+            if not itens_criticos.empty:
+                st.warning(f"⚠️ **Atenção Farmacêutica:** Existem {len(itens_criticos)} produto(s) com nível crítico de estoque (menos de 10 unidades).")
+        else:
+            st.error("Não foram encontrados medicamentos cadastrados.")
 
+    # ABA ADMIN 3: VISUALIZADOR DE ARQUIVOS JSON E PERFIL
+    with tab_adm_json:
+        st.subheader("⚙️ Estrutura de Dados do Perfil Operacional e Parceiros")
+        st.markdown("Abaixo estão os arquivos de configuração do sistema apresentados no formato JSON nativo:")
+        
         col_json_1, col_json_2 = st.columns(2)
+        
         with col_json_1:
-            st.markdown("### Identidade da Plataforma (JSON)")
+            st.markdown("#### 📋 Regulação & Parâmetros do Perfil (JSON)")
+            # Exibição nativa do dicionário estruturado do perfil
             st.json(CONFIGURACAO_IDENTIDADE_DICT)
-            st.download_button(
-                "📥 Download Config (JSON)",
-                data=json.dumps(CONFIGURACAO_IDENTIDADE_DICT, indent=4, ensure_ascii=False),
-                file_name="config_identidade.json",
-                mime="application/json"
-            )
-
+            
         with col_json_2:
-            st.markdown("### Redes Parceiras Credenciadas (JSON)")
+            st.markdown("#### 🏪 Redes de Farmácias e Parceiros (JSON)")
+            # Exibição do array com o mapa e lojas parceiras
             st.json(FARMACIAS_PARCEIRAS_DATA)
-            st.download_button(
-                "📥 Download Parceiros (JSON)",
-                data=json.dumps(FARMACIAS_PARCEIRAS_DATA, indent=4, ensure_ascii=False),
-                file_name="farmacias_parceiras.json",
-                mime="application/json"
-            )
 
 # ==========================================
 # 6. RODAPÉ INFERIOR REGULATÓRIO (ANVISA)
@@ -786,12 +649,11 @@ st.markdown("---")
 col_foot_1, col_foot_2 = st.columns([1, 5])
 
 with col_foot_1:
-    # Imagem/Badge representativo do órgão fiscalizador ANVISA
     st.image("https://www.gov.br/anvisa/pt-br/assuntos/noticias-anvisa/2021/anvisa-reforca-orientacoes-sobre-uso-de-mascaras/logo-anvisa.png/@@images/image", width=120)
 
 with col_foot_2:
     st.markdown("""
     <div class="footer-anvisa">
-        o nosso projeto segue as determinações da ANVISA (agência nacional de vigilância sanitária) e as normas de boa prática de dispensação farmacêutica vigente.
+        O nosso projeto segue as determinações da ANVISA (Agência Nacional de Vigilância Sanitária) e as normas de boa prática de dispensação farmacêutica vigente.
     </div>
     """, unsafe_allow_html=True)
