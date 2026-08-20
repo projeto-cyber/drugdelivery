@@ -520,7 +520,7 @@ footer_html = f"""
 
 <div class="anvisa-footer">
     <a href="https://www.gov.br/anvisa/pt-br" target="_blank" rel="noopener noreferrer" title="Acesse o Portal da ANVISA">
-        <img src="{https://images.seeklogo.com/logo-png/0/2/anvisa-logo-png_seeklogo-9430.png}" alt="Selo ANVISA" class="anvisa-logo" />
+        <img src="{https://www12.senado.leg.br/noticias/arquivos/2021/02/11/anvisa.png/view}" alt="Selo ANVISA" class="anvisa-logo" />
     </a>
     <div class="anvisa-info">
         <p class="anvisa-text">
@@ -528,7 +528,7 @@ footer_html = f"""
         </p>
         <p class="anvisa-legal">
             Razão Social: Sua Farmácia Ltda | CNPJ: 00.000.000/0001-00 | AFE/ANVISA nº: 1.23456.7 | Licença Sanitária: nº 1234/2026<br/>
-            Farmacêutico Responsável: Dr. Nome Exemplo - CRF-DF nº 00000
+            Farmacêutico Responsável: Dr. Selton Bernardo - CRF-DF nº 589416
         </p>
     </div>
 </div>
