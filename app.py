@@ -455,84 +455,61 @@ st.divider()
 # CÓDIGO DE INTEGRAÇÃO DO RODAPÉ ANVISA
 # ==========================================
 
-# Substitua pela URL direta da logo da ANVISA hospedada ou em base64/SVG
-ANVISA_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Logo_ANVISA.svg/320px-Logo_ANVISA.svg.png"
+import streamlit as st
 
-footer_html = f"""
-<style>
-    /* Estilização do container do rodapé */
-    .anvisa-footer {{
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: center;
-        gap: 16px;
-        padding: 20px 10px;
-        border-top: 1px solid #e0e0e0;
-        margin-top: 40px;
-        background-color: #f9f9f9;
-        border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }}
-
-    /* Imagem da logo ANVISA em tamanho reduzido */
-    .anvisa-logo {{
-        width: 90px;
-        height: auto;
-        object-fit: contain;
-        filter: grayscale(20%);
-        transition: filter 0.3s ease;
-    }}
-
-    .anvisa-logo:hover {{
-        filter: grayscale(0%);
-    }}
-
-    /* Bloco de texto informativo */
-    .anvisa-info {{
-        display: flex;
-        flex-direction: column;
-        max-width: 650px;
-    }}
-
-    .anvisa-text {{
-        font-size: 11px;
-        color: #555555;
-        margin: 0;
-        line-height: 1.4;
-    }}
-
-    .anvisa-legal {{
-        font-size: 10px;
-        color: #888888;
-        margin-top: 4px;
-        line-height: 1.3;
-    }}
-
-    /* Responsividade para telas menores */
-    @media (max-width: 640px) {{
-        .anvisa-footer {{
-            flex-direction: column;
-            text-align: center;
+def renderizar_rodape_anvisa():
+    """Injeta o rodapé com o selo da ANVISA no final da página do Streamlit."""
+    
+    anvisa_logo_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Logo_ANVISA.svg/320px-Logo_ANVISA.svg.png"
+    
+    footer_html = f"""
+    <style>
+        .anvisa-container {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px;
+            margin-top: 50px;
+            border-top: 1px solid #dcdcdc;
+            background-color: transparent;
         }}
-    }}
-</style>
+        .anvisa-logo {{
+            width: 85px;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }}
+        .anvisa-logo:hover {{
+            opacity: 1;
+        }}
+        .anvisa-info p {{
+            margin: 0;
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+        }}
+        .anvisa-info .legal {{
+            font-size: 10px;
+            color: #999;
+        }}
+    </style>
 
-<div class="anvisa-footer">
-    <a href="https://www.gov.br/anvisa/pt-br" target="_blank" rel="noopener noreferrer" title="Acesse o Portal da ANVISA">
-        <img src="{https://www12.senado.leg.br/noticias/arquivos/2021/02/11/anvisa.png/view}" alt="Selo ANVISA" class="anvisa-logo" />
-    </a>
-    <div class="anvisa-info">
-        <p class="anvisa-text">
-            <strong>Conformidade Regulatória:</strong> Este estabelecimento cumpre as diretrizes da Resolução RDC nº 44/2009 da ANVISA para a prestação de serviços farmacêuticos e vendas remotas.
-        </p>
-        <p class="anvisa-legal">
-            Razão Social: Sua Farmácia Ltda | CNPJ: 00.000.000/0001-00 | AFE/ANVISA nº: 1.23456.7 | Licença Sanitária: nº 1234/2026<br/>
-            Farmacêutico Responsável: Dr. Selton Bernardo - CRF-DF nº 589416
-        </p>
+    <div class="anvisa-container">
+        <a href="https://www.gov.br/anvisa/pt-br" target="_blank">
+            <img src="{anvisa_logo_url}" class="anvisa-logo" alt="Selo ANVISA">
+        </a>
+        <div class="anvisa-info">
+            <p><strong>Conformidade Regulatória:</strong> Adequado à RDC nº 44/2009 (ANVISA).</p>
+            <p class="legal">Razão Social: Farmácia Exemplo Ltda | CNPJ: 00.000.000/0001-00<br>
+            Farmacêutico Responsável: Dr. Nome Exemplo - CRF-DF nº 00000</p>
+        </div>
     </div>
-</div>
-"""
+    """
+    st.markdown(footer_html, unsafe_allow_html=True)
 
-# Renderização do código HTML no Streamlit
-st.markdown(footer_html, unsafe_allow_html=True)
+# Interface principal
+st.title("Sistema da Farmácia")
+st.write("Conteúdo principal do seu aplicativo Streamlit vai aqui.")
+
+# Chamada da função sempre no final do script
+renderizar_rodape_anvisa()
