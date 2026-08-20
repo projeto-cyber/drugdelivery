@@ -469,7 +469,7 @@ def renderizar_rodape_anvisa(caminho_logo):
     logo_base64 = carregar_imagem_base64(caminho_logo)
     
     # Caso a imagem local não exista, usa um placeholder fallback para não quebrar a tela
-    src_imagem = logo_base64 if logo_base64 else "https://via.placeholder.com/85x40?text=ANVISA"
+    src_imagem = logo_base64 if logo_base64 else "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Anvisa_logo.svg/320px-Anvisa_logo.svg.png"
 
     footer_html = f"""
     <style>
