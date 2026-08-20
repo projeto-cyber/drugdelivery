@@ -520,7 +520,7 @@ footer_html = f"""
 
 <div class="anvisa-footer">
     <a href="https://www.gov.br/anvisa/pt-br" target="_blank" rel="noopener noreferrer" title="Acesse o Portal da ANVISA">
-        <img src="{ANVISA_LOGO_URL}" alt="Selo ANVISA" class="anvisa-logo" />
+        <img src="{https://images.seeklogo.com/logo-png/0/2/anvisa-logo-png_seeklogo-9430.png}" alt="Selo ANVISA" class="anvisa-logo" />
     </a>
     <div class="anvisa-info">
         <p class="anvisa-text">
