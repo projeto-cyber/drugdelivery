@@ -438,11 +438,101 @@ if st.session_state.usuario_perfil == "Cliente":
 # ==========================================
 # RODAPÉ INFERIOR (ANVISA)
 # ==========================================
-st.markdown("---")
-col_foot_1, col_foot_2, col_foot_3 = st.columns([2, 3, 2])
-with col_foot_2:
-    st.image(CONFIGURACAO_IDENTIDADE_JSON["identidade_visual"]["logo_anvisa_url"], width=160)
-    st.markdown(
-        "<p class='footer-text'>Este projeto segue as determinações da anvisa (agência nacional de vigilância sanitária).</p>",
-        unsafe_allow_html=True
-    )
+# Exemplo de configuração da página Streamlit
+st.set_page_config(page_title="Drogaria Online", page_icon="💊", layout="wide")
+
+# ==========================================
+# SEU CONTEÚDO PRINCIPAL DO SITE VEM AQUI
+# ==========================================
+st.title("Drogaria Exemplo")
+st.write("Bem-vindo ao nosso e-commerce farmacêutico.")
+st.write("Aqui você pode adicionar seus produtos, barra de pesquisa, carrinho, etc.")
+
+# Divisor para separar o conteúdo do rodapé
+st.divider()
+
+# ==========================================
+# CÓDIGO DE INTEGRAÇÃO DO RODAPÉ ANVISA
+# ==========================================
+
+# Substitua pela URL direta da logo da ANVISA hospedada ou em base64/SVG
+ANVISA_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Logo_ANVISA.svg/320px-Logo_ANVISA.svg.png"
+
+footer_html = f"""
+<style>
+    /* Estilização do container do rodapé */
+    .anvisa-footer {{
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 20px 10px;
+        border-top: 1px solid #e0e0e0;
+        margin-top: 40px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }}
+
+    /* Imagem da logo ANVISA em tamanho reduzido */
+    .anvisa-logo {{
+        width: 90px;
+        height: auto;
+        object-fit: contain;
+        filter: grayscale(20%);
+        transition: filter 0.3s ease;
+    }}
+
+    .anvisa-logo:hover {{
+        filter: grayscale(0%);
+    }}
+
+    /* Bloco de texto informativo */
+    .anvisa-info {{
+        display: flex;
+        flex-direction: column;
+        max-width: 650px;
+    }}
+
+    .anvisa-text {{
+        font-size: 11px;
+        color: #555555;
+        margin: 0;
+        line-height: 1.4;
+    }}
+
+    .anvisa-legal {{
+        font-size: 10px;
+        color: #888888;
+        margin-top: 4px;
+        line-height: 1.3;
+    }}
+
+    /* Responsividade para telas menores */
+    @media (max-width: 640px) {{
+        .anvisa-footer {{
+            flex-direction: column;
+            text-align: center;
+        }}
+    }}
+</style>
+
+<div class="anvisa-footer">
+    <a href="https://www.gov.br/anvisa/pt-br" target="_blank" rel="noopener noreferrer" title="Acesse o Portal da ANVISA">
+        <img src="{ANVISA_LOGO_URL}" alt="Selo ANVISA" class="anvisa-logo" />
+    </a>
+    <div class="anvisa-info">
+        <p class="anvisa-text">
+            <strong>Conformidade Regulatória:</strong> Este estabelecimento cumpre as diretrizes da Resolução RDC nº 44/2009 da ANVISA para a prestação de serviços farmacêuticos e vendas remotas.
+        </p>
+        <p class="anvisa-legal">
+            Razão Social: Sua Farmácia Ltda | CNPJ: 00.000.000/0001-00 | AFE/ANVISA nº: 1.23456.7 | Licença Sanitária: nº 1234/2026<br/>
+            Farmacêutico Responsável: Dr. Nome Exemplo - CRF-DF nº 00000
+        </p>
+    </div>
+</div>
+"""
+
+# Renderização do código HTML no Streamlit
+st.markdown(footer_html, unsafe_allow_html=True)
