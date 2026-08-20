@@ -4,6 +4,8 @@ import sqlite3
 import json
 import time
 from datetime import datetime
+import base64
+import os
 
 # ==========================================
 # CONFIGURAÇÃO DE LAYOUT E ESTILO DA PÁGINA
@@ -455,13 +457,20 @@ st.divider()
 # CÓDIGO DE INTEGRAÇÃO DO RODAPÉ ANVISA
 # ==========================================
 
-import streamlit as st
+def carregar_imagem_base64(caminho_imagem):
+    """Lê uma imagem local e a converte para uma string Base64."""
+    if os.path.exists(caminho_imagem):
+        with open(caminho_imagem, "rb") as file:
+            encoded = base64.b64encode(file.read()).decode()
+            return f"data:image/png;base64,{encoded}"
+    return None
 
-def renderizar_rodape_anvisa():
-    """Injeta o rodapé com o selo da ANVISA no final da página do Streamlit."""
+def renderizar_rodape_anvisa(caminho_logo):
+    logo_base64 = carregar_imagem_base64(caminho_logo)
     
-    anvisa_logo_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Logo_ANVISA.svg/320px-Logo_ANVISA.svg.png"
-    
+    # Caso a imagem local não exista, usa um placeholder fallback para não quebrar a tela
+    src_imagem = logo_base64 if logo_base64 else "https://via.placeholder.com/85x40?text=ANVISA"
+
     footer_html = f"""
     <style>
         .anvisa-container {{
@@ -469,14 +478,15 @@ def renderizar_rodape_anvisa():
             align-items: center;
             justify-content: center;
             gap: 15px;
-            padding: 20px;
+            padding: 20px 0;
             margin-top: 50px;
             border-top: 1px solid #dcdcdc;
-            background-color: transparent;
         }}
         .anvisa-logo {{
             width: 85px;
-            opacity: 0.8;
+            height: auto;
+            object-fit: contain;
+            opacity: 0.85;
             transition: opacity 0.3s;
         }}
         .anvisa-logo:hover {{
@@ -484,7 +494,7 @@ def renderizar_rodape_anvisa():
         }}
         .anvisa-info p {{
             margin: 0;
-            font-size: 12px;
+            font-size: 11px;
             color: #666;
             line-height: 1.4;
         }}
@@ -495,21 +505,23 @@ def renderizar_rodape_anvisa():
     </style>
 
     <div class="anvisa-container">
-        <a href="https://www.gov.br/anvisa/pt-br" target="_blank">
-            <img src="{anvisa_logo_url}" class="anvisa-logo" alt="Selo ANVISA">
+        <a href="https://www.gov.br/anvisa/pt-br" target="_blank" rel="noopener noreferrer">
+            <img src="{src_imagem}" class="anvisa-logo" alt="Selo ANVISA">
         </a>
         <div class="anvisa-info">
             <p><strong>Conformidade Regulatória:</strong> Adequado à RDC nº 44/2009 (ANVISA).</p>
-            <p class="legal">Razão Social: Farmácia Exemplo Ltda | CNPJ: 00.000.000/0001-00<br>
-            Farmacêutico Responsável: Dr. Nome Exemplo - CRF-DF nº 00000</p>
+            <p class="legal">
+                Razão Social: Farmácia Exemplo Ltda | CNPJ: 00.000.000/0001-00<br>
+                Farmacêutico Responsável: Dr. Nome Exemplo - CRF-DF nº 00000
+            </p>
         </div>
     </div>
     """
     st.markdown(footer_html, unsafe_allow_html=True)
 
-# Interface principal
-st.title("Sistema da Farmácia")
-st.write("Conteúdo principal do seu aplicativo Streamlit vai aqui.")
+# --- Aplicação Principal Streamlit ---
+st.title("Sistema de Vendas Farmacêutico")
+st.write("Conteúdo principal do site...")
 
-# Chamada da função sempre no final do script
-renderizar_rodape_anvisa()
+# Chama a função passando o caminho exato do arquivo de imagem do seu projeto
+renderizar_rodape_anvisa("anvisa.png")  # Ou "assets/anvisa.png"
