@@ -10,12 +10,6 @@ import streamlit as st
 # ==========================================
 # 0. COMPONENTE EM 2 COLUNAS INTEGRADO
 # ==========================================
-st.title("🏷️ Categorias & Arquitetura de Dados")
-st.markdown(
-    "Navegue pelas categorias aninhadas ou inspecione a estrutura JSON da"
-    " aplicação."
-)
-st.divider()
 
 # Cria as duas colunas
 col1, col2 = st.columns(2)
