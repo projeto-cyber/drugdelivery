@@ -12,8 +12,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown
-    st.header(">Medicamentos e Blisters</h4>
-    </div>")
+    st.header(">Medicamentos e Blisters")
     st.write("""
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
         <img src="https://cdn-icons-png.flaticon.com/512/883/883407.png" width="30" height="30" alt="Blister">
@@ -22,8 +21,7 @@ with col1:
 
 with col2:
     st.markdown
-    st.header(">Nossas Lojas e Farmácias</h4>
-    </div>")
+    st.header(">Nossas Lojas e Farmácias")
     st.write("""
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
         <img src="https://cdn-icons-png.flaticon.com/512/1077/1077035.png" width="30" height="30" alt="Fachada">
