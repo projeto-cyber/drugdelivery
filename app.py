@@ -7,27 +7,209 @@ import time
 import pandas as pd
 import streamlit as st
 
-# Cria duas colunas de tamanhos iguais
+# ==========================================
+# 0. CONFIGURAÇÃO DE PÁGINA
+# ==========================================
+st.set_page_config(
+    page_title="PharmaStream Pro",
+    page_icon="💊",
+    layout="wide",
+)
+
+# ==========================================
+# 01. JSON REDESENHADO COM ANINHAMENTO DE PRODUTOS
+# ==========================================
+CONFIGURACAO_IDENTIDADE_JSON = {
+    "aplicacao": {
+        "nome": "PharmaStream Pro",
+        "versao": "2.4.0",
+        "segmento": "E-Commerce & Gestão Farmacêutica",
+        "conformidade_regulatoria": (
+            "ANVISA - Agência Nacional de Vigilância Sanitária"
+        ),
+    },
+    "identidade_visual": {
+        "cor_primaria": "#1E3A8A",
+        "cor_secundaria": "#09AB3B",
+        "cor_alerta": "#FF4B4B",
+        "cor_destaque": "#FF9800",
+        "logo_anvisa_url": (
+            "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Anvisa_logo.svg/320px-Anvisa_logo.svg.png"
+        ),
+    },
+    "arvore_categorias": {
+        "Medicamentos": {
+            "icone_url": "https://cdn-icons-png.flaticon.com/512/883/883407.png",  # Mini imagem de Blister
+            "subcategorias": {
+                "Analgésicos e Antitérmicos": [
+                    {
+                        "nome": "Dipirona Monoidratada 1g",
+                        "preco": 9.90,
+                        "receita": False,
+                    },
+                    {
+                        "nome": "Paracetamol 750mg",
+                        "preco": 11.20,
+                        "receita": False,
+                    },
+                ],
+                "Anti-inflamatórios": [
+                    {
+                        "nome": "Ibuprofeno 600mg",
+                        "preco": 18.50,
+                        "receita": False,
+                    }
+                ],
+                "Controlados / Ansiolíticos": [
+                    {
+                        "nome": "Diazepam 10mg",
+                        "preco": 24.50,
+                        "receita": True,
+                    },
+                    {
+                        "nome": "Clonazepam 2mg",
+                        "preco": 21.00,
+                        "receita": True,
+                    },
+                ],
+            },
+        },
+        "Cuidados Diários & Higiene": {
+            "icone_url": "https://cdn-icons-png.flaticon.com/512/2913/2913520.png",  # Mini imagem de Higiene
+            "subcategorias": {
+                "Anti-histamínicos": [
+                    {
+                        "nome": "Cloridrato de Loratadina 10mg",
+                        "preco": 14.80,
+                        "receita": False,
+                    }
+                ],
+                "Saúde Bucal": [
+                    {
+                        "nome": "Enxaguante Bucal Antisséptico 500ml",
+                        "preco": 22.90,
+                        "receita": False,
+                    }
+                ],
+            },
+        },
+        "Mamãe & Bebê": {
+            "icone_url": "https://cdn-icons-png.flaticon.com/512/3082/3082060.png",  # Mini imagem Mamadeira/Bebê
+            "subcategorias": {
+                "Fraldas e Higiene": [
+                    {
+                        "nome": "Fralda Tam P (Pacote C/ 32)",
+                        "preco": 45.90,
+                        "receita": False,
+                    }
+                ],
+                "Amamentação": [
+                    {
+                        "nome": "Concha de Amamentação",
+                        "preco": 29.90,
+                        "receita": False,
+                    }
+                ],
+            },
+        },
+        "Nossas Lojas / Pet": {
+            "icone_url": "https://cdn-icons-png.flaticon.com/512/1077/1077035.png",  # Mini imagem Fachada de Loja
+            "subcategorias": {
+                "Medicamentos Pet": [
+                    {
+                        "nome": "Antipulgas e Carrapatos Cães",
+                        "preco": 79.90,
+                        "receita": False,
+                    }
+                ]
+            },
+        },
+    },
+}
+
+# Funções simuladas para o estado do carrinho
+if "carrinho_vendas" not in st.session_state:
+    st.session_state.carrinho_vendas = []
+
+
+def inserir_produto_carrinho(nome, preco, requer_receita):
+    st.session_state.carrinho_vendas.append(
+        {"nome": nome, "preco": preco, "requer_receita": requer_receita}
+    )
+    st.toast(f"{nome} adicionado ao carrinho!", icon="🛒")
+
+
+# ==========================================
+# 03. COMPONENTE EM 2 COLUNAS INTEGRADO
+# ==========================================
+st.title("🏷️ Categorias & Arquitetura de Dados")
+st.markdown(
+    "Navegue pelas categorias aninhadas ou inspecione a estrutura JSON da"
+    " aplicação."
+)
+st.divider()
+
+# Cria as duas colunas
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown
-    st.header(">Medicamentos e Blisters")
-    st.write("""
-    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-        <img src="https://cdn-icons-png.flaticon.com/512/883/883407.png" width="30" height="30" alt="Blister">
-        <h4 style="margin: 0;"
-    """)
+    st.subheader("📂 Catálogo Interativo")
+    st.caption(
+        "Clique nos tópicos para abrir as subcategorias e ver os produtos"
+        " representantes:"
+    )
+
+    arvore = CONFIGURACAO_IDENTIDADE_JSON["arvore_categorias"]
+
+    for cat_nome, cat_dados in arvore.items():
+        # Cabeçalho customizado em HTML com a Mini Imagem (Estilo Mercado/iFood)
+        header_html = f"""
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <img src="{cat_dados['icone_url']}" width="22" height="22" style="object-fit: contain;">
+            <span style="font-weight: bold; font-size: 1.05rem;">{cat_nome}</span>
+        </div>
+        """
+
+        # Expander (Tópico com clique para abrir os subtópicos)
+        with st.expander(f"📁 {cat_nome}", expanded=False):
+            st.markdown(header_html, unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Iteração pelas Subcategorias
+            for sub_nome, produtos_list in cat_dados["subcategorias"].items():
+                st.markdown(f"**🔹 {sub_nome}**")
+
+                # Aninhamento dos produtos representativos
+                for prod in produtos_list:
+                    c_detalhes, c_acao = st.columns([3, 1])
+
+                    with c_detalhes:
+                        status_rec = (
+                            "🔴 (Receita)" if prod["receita"] else "🟢 (Venda Livre)"
+                        )
+                        st.write(
+                            f"• {prod['nome']} — **R$"
+                            f" {prod['preco']:.2f}** {status_rec}"
+                        )
+
+                    with c_acao:
+                        if st.button(
+                            "🛒",
+                            key=f"btn_{cat_nome}_{sub_nome}_{prod['nome']}",
+                            help="Adicionar ao Carrinho",
+                        ):
+                            inserir_produto_carrinho(
+                                prod["nome"], prod["preco"], prod["receita"]
+                            )
+
+                st.markdown("---")
 
 with col2:
-    st.markdown
-    st.header(">Nossas Lojas e Farmácias")
-    st.write("""
-    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-        <img src="https://cdn-icons-png.flaticon.com/512/1077/1077035.png" width="30" height="30" alt="Fachada">
-        <h4 style="margin: 0;"
-    """)
+    st.subheader("⚙️ Identidade & Configuração JSON")
+    st.caption("Visualização em tempo real do arquivo de identidade e dados:")
 
+    # Exibe a estrutura de dados JSON formatada
+    st.json(CONFIGURACAO_IDENTIDADE_JSON)
 
 # ==========================================
 # 1. CONFIGURAÇÃO ÚNICA DE LAYOUT (DEVE SER A PRIMEIRA)
