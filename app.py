@@ -7,71 +7,7 @@ import time
 import pandas as pd
 import streamlit as st
 
-# ==========================================
-# 0. COMPONENTE EM 2 COLUNAS INTEGRADO
-# ==========================================
 
-# Cria as duas colunas
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("📂 Catálogo Interativo")
-    st.caption(
-        "Clique nos tópicos para abrir as subcategorias e ver os produtos"
-        " representantes:"
-    )
-
-    arvore = CONFIGURACAO_IDENTIDADE_JSON["arvore_categorias"]
-
-    for cat_nome, cat_dados in arvore.items():
-        # Cabeçalho customizado em HTML com a Mini Imagem (Estilo Mercado/iFood)
-        header_html = f"""
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <img src="{cat_dados['icone_url']}" width="22" height="22" style="object-fit: contain;">
-            <span style="font-weight: bold; font-size: 1.05rem;">{cat_nome}</span>
-        </div>
-        """
-
-        # Expander (Tópico com clique para abrir os subtópicos)
-        with st.expander(f"📁 {cat_nome}", expanded=False):
-            st.markdown(header_html, unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Iteração pelas Subcategorias
-            for sub_nome, produtos_list in cat_dados["subcategorias"].items():
-                st.markdown(f"**🔹 {sub_nome}**")
-
-                # Aninhamento dos produtos representativos
-                for prod in produtos_list:
-                    c_detalhes, c_acao = st.columns([3, 1])
-
-                    with c_detalhes:
-                        status_rec = (
-                            "🔴 (Receita)" if prod["receita"] else "🟢 (Venda Livre)"
-                        )
-                        st.write(
-                            f"• {prod['nome']} — **R$"
-                            f" {prod['preco']:.2f}** {status_rec}"
-                        )
-
-                    with c_acao:
-                        if st.button(
-                            "🛒",
-                            key=f"btn_{cat_nome}_{sub_nome}_{prod['nome']}",
-                            help="Adicionar ao Carrinho",
-                        ):
-                            inserir_produto_carrinho(
-                                prod["nome"], prod["preco"], prod["receita"]
-                            )
-
-                st.markdown("---")
-
-with col2:
-    st.subheader("⚙️ Identidade & Configuração JSON")
-    st.caption("Visualização em tempo real do arquivo de identidade e dados:")
-
-    # Exibe a estrutura de dados JSON formatada
-    st.json(CONFIGURACAO_IDENTIDADE_JSON)
 
 # ==========================================
 # 1. CONFIGURAÇÃO ÚNICA DE LAYOUT (DEVE SER A PRIMEIRA)
