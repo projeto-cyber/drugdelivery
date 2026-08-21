@@ -14,7 +14,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.header("Coluna 1")
     st.write
-    st.markdown(
+    st.markdown((
     """
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
         <img src="https://cdn-icons-png.flaticon.com/512/883/883407.png" width="30" height="30" alt="Blister">
@@ -22,12 +22,12 @@ with col1:
     </div>
     """,
     unsafe_allow_html=True,
-)
+))
 
 with col2:
     st.header("Coluna 2")
     st.write
-    st.markdown(
+    st.markdown((
     """
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
         <img src="https://cdn-icons-png.flaticon.com/512/1077/1077035.png" width="30" height="30" alt="Fachada">
@@ -35,7 +35,7 @@ with col2:
     </div>
     """,
     unsafe_allow_html=True,
-)
+))
 
 # ==========================================
 # 1. CONFIGURAÇÃO ÚNICA DE LAYOUT (DEVE SER A PRIMEIRA)
