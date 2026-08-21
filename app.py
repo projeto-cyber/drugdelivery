@@ -11,19 +11,6 @@ import streamlit as st
 col1, col2 = st.columns(2)
 
 with col1:
-    import base64
-from datetime import datetime
-import json
-import os
-import sqlite3
-import time
-import pandas as pd
-import streamlit as st
-
-# Cria duas colunas de tamanhos iguais
-col1, col2 = st.columns(2)
-
-with col1:
     st.markdown
     st.header("Coluna 1")
     st.write("""
