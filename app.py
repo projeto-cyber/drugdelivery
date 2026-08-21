@@ -7,26 +7,17 @@ import time
 import pandas as pd
 import streamlit as st
 
-# Exemplo de como renderizar tópicos usando mini imagens customizadas em vez de emojis
-st.markdown(
-    """
-    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-        <img src="https://cdn-icons-png.flaticon.com/512/883/883407.png" width="30" height="30" alt="Blister">
-        <h4 style="margin: 0;">Medicamentos e Blisters</h4>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+# Cria duas colunas de tamanhos iguais
+col1, col2 = st.columns(2)
 
-st.markdown(
-    """
-    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-        <img src="https://cdn-icons-png.flaticon.com/512/1077/1077035.png" width="30" height="30" alt="Fachada">
-        <h4 style="margin: 0;">Nossas Lojas e Farmácias</h4>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+with col1:
+    st.header("Coluna 1")
+    st.write("Este texto fica na primeira coluna.")
+
+with col2:
+    st.header("Coluna 2")
+    st.write("Este texto fica na segunda coluna.")
+
 
 # ==========================================
 # 1. CONFIGURAÇÃO ÚNICA DE LAYOUT (DEVE SER A PRIMEIRA)
